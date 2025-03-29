@@ -23,7 +23,7 @@ function main(){
     console.log('Bot is running');
     clearInterval(clock);
     clock = setInterval(function (){
-        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
+        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=${config.TIMEFRAME}`)
         .then((response)=>{
             let candle = response.data.candles[0];
             let candletimestamp = candle.time;
