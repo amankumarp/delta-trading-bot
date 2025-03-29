@@ -1,30 +1,11 @@
-version: '3'
+version: "3.8"  # Specify docker-compose file format version
+
 services:
-  market-data:
-    build: ./services/market-data
-    container_name: market-data
-    environment:
-      - NODE_ENV=production
+  app:
+    build:
+      context: .          # Build from the current directory
+      dockerfile: Dockerfile  # Specify the Dockerfile name if not default
     ports:
-      - "3001:3000"
-  strategy:
-    build: ./services/strategy
-    container_name: strategy
-    environment:
-      - NODE_ENV=production
-    ports:
-      - "3002:3000"
-  order-execution:
-    build: ./services/order-execution
-    container_name: order-execution
-    environment:
-      - NODE_ENV=production
-    ports:
-      - "3003:3000"
-  api-gateway:
-    build: .
-    container_name: api-gateway
-    environment:
-      - NODE_ENV=production
-    ports:
-      - "80:3000"
+      - "3002:3002"           # Map host port 80 to container port 80 (adjust as needed)
+    volumes:
+      - ./:/usr/src/app   # Example volume mount: mount current directory to /usr/src/app in the container

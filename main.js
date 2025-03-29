@@ -44,14 +44,14 @@ function main(){
                 if(candle.bullish==true){
                     // Place Buy Order
                     prevTrade = candle;
-                    telegramService.getTradeSignalMessage(candle.signal,config.SYMBOL, candle.close, candle.supertrend,"");
+                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", candle.supertrend);
                     // placeOrder(config.SYMBOL, 'buy', 10, candle.close, 'limit_order', sl = candle.supertrend);
 
                 }
                 if(candle.bullish==false){
                     // Place Sell Order
                     prevTrade = candle;
-                    telegramService.getTradeSignalMessage(candle.signal,config.SYMBOL, candle.close, candle.supertrend,"");
+                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", candle.supertrend);
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
                 }
             }
