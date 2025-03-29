@@ -9,7 +9,7 @@
         "routes/*"
     ],
     "scripts": {
-        "start": "concurrently \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"",
+        "start": "concurrently \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\" \"node main.js\"",
         "start:market-data": "nodemon services/market-data/index.js",
         "start:strategy": "nodemon services/strategy/index.js",
         "start:order-execution": "nodemon services/order-execution/index.js",

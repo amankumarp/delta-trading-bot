@@ -33,7 +33,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         // console.log('open', open);
         // Calculate Supertrend
         const response = supertrendAI.generateSignals({ open, high, low, close, time, volume });
-        logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
         res.json({signal:response.signals.reverse(),candles:response.candles.reverse()});
     } catch (error) {
         logger.error(`Error generating Supertrend signals: ${error.message}`);

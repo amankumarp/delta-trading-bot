@@ -33,7 +33,7 @@ router.get('/ohlcv', async (req, res) => {
             },
         });
         
-        logger.info(`Fetched OHLCV data for symbol: ${symbol}, interval: ${interval}`);
+        // logger.info(`Fetched OHLCV data for symbol: ${symbol}, interval: ${interval}`);
         res.json(response.data.result);
     } catch (error) {
         logger.error(`Error fetching OHLCV data: ${error.message}`);
