@@ -1,0 +1,30 @@
+version: '3'
+services:
+  market-data:
+    build: ./services/market-data
+    container_name: market-data
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "3001:3000"
+  strategy:
+    build: ./services/strategy
+    container_name: strategy
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "3002:3000"
+  order-execution:
+    build: ./services/order-execution
+    container_name: order-execution
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "3003:3000"
+  api-gateway:
+    build: .
+    container_name: api-gateway
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "80:3000"
