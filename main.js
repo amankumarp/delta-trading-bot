@@ -18,14 +18,18 @@ const strategyService = new SupertrendAI();
 
 let lastCandleTimestamp = 0;
 var clock; 
-let prevTrade;
+var prevTrade;
 function main(){
     console.log('Bot is running');
     clearInterval(clock);
     clock = setInterval(function (){
-        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=${config.TIMEFRAME}`)
+        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
         .then((response)=>{
             let candle = response.data.candles[0];
+            let prevCandle = response.data.candles[1];
+            if(response.data.signal[0]&& response.data.signal[0].signal!="exit"){
+                prevTrade = response.data.signal[0];
+            }
             let candletimestamp = candle.time;
             
             if(lastCandleTimestamp === 0){
@@ -35,7 +39,11 @@ function main(){
                 lastCandleTimestamp = candletimestamp;
                 console.log('New Candle Detected');
                 console.log('Signal:', candle);
-                
+
+                if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)){
+                    telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),"trail");
+                }
+
                 if(candle.exit_signal && prevTrade!=null) {
                     telegramService.getExitNotificationMessage(config.SYMBOL,candle.close,0 ,"exit");
                     prevTrade =null;
@@ -44,22 +52,27 @@ function main(){
                 if(candle.bullish==true){
                     // Place Buy Order
                     prevTrade = candle;
-                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", candle.supertrend);
+                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, 
+                    candle.close, 
+                    "", 
+                    Number(candle.supertrend).toFixed(2)
+                    );
                     // placeOrder(config.SYMBOL, 'buy', 10, candle.close, 'limit_order', sl = candle.supertrend);
 
                 }
                 if(candle.bullish==false){
                     // Place Sell Order
                     prevTrade = candle;
-                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", candle.supertrend);
+                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
                 }
+                prevCandle = candle;
             }
         })
         .catch((error)=>{
             console.log(error);
         })
-    }, 1000);
+    },  );
 }
 
 main();
