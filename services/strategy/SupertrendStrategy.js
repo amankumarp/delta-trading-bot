@@ -50,6 +50,7 @@ class SupertrendAI {
             
             let signal = null;
             let exitSignal = null;
+            let partialExit = null;
             let profitPct = 0;
             if(this.activeSignal){
                 if(isCrossUp[i] && !(this.activeSignal.bullish)) {    
@@ -64,6 +65,15 @@ class SupertrendAI {
                     this.activeSignal=null;
                     signals.push({...exitSignal, profit:profitPct});
                 } 
+                if(this.rsi[i] >= 80 && (this.activeSignal.bullish)){
+                    partialExit = { time:time[i], signal: 'partial exit',  price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
+                    signals.push({...partialExit, profit:profitPct});
+                } else if(this.rsi[i] <= 20 && !(this.activeSignal.bullish)){
+                    partialExit = { time:time[i], signal: 'partial exit', price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
+                    signals.push({...partialExit, profit:profitPct});
+                }
             } else{
                 if(isCrossUp[i]) {
                     signal = { signal: 'cross up', bullish:true, price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
@@ -105,6 +115,7 @@ class SupertrendAI {
                 supertrend:this.supertrend[i],
                 // support: this.lowest[i],
                 // resistance: this.highest[i],
+                partial_exit:partialExit?"partial_exit":null,
                 exit_signal:exitSignal?'exit':null,
                 new_signal:signal?signal.signal:null,
                 bullish:signal?signal.bullish:null,

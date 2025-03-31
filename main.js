@@ -52,6 +52,9 @@ function main(){
                     await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close, candle.profit,"exit");
                     prevTrade =null;
                 }
+                if(candle.partial_exit && prevTrade!=null){
+                    await telegramService.getPartialExitMessage(config.SYMBOL, candle.close, "60%", "40%");
+                }
 
                 if(candle.bullish==true){
                     // Place Buy Order
