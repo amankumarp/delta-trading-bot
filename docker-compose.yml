@@ -9,3 +9,4 @@ services:
       - "3002:3002"           # Map host port 80 to container port 80 (adjust as needed)
     volumes:
       - ./:/usr/src/app   # Example volume mount: mount current directory to /usr/src/app in the container
+      - ./logs:/usr/src/app/logs

@@ -17,7 +17,27 @@ class SupertrendAI {
         this.trend = [];
         this.activeSignal=null;
     }
-    
+    calculateProfitPercentage(exitSignal) {
+        const exitPrice = exitSignal.price;
+        const activeTrade = exitSignal.active;
+        
+        if (!activeTrade || typeof activeTrade.entryPrice === 'undefined') {
+          throw new Error("Active trade information with entryPrice is required");
+        }
+      
+        const entryPrice = activeTrade.entryPrice;
+      
+        let profitPct;
+        if (activeTrade.bullish) {
+          // For BUY orders, profit if exit price is higher than entry price.
+          profitPct = ((exitPrice - entryPrice) / entryPrice) * 100;
+        } else {
+          // For SELL orders, profit if exit price is lower than entry price.
+          profitPct = ((entryPrice - exitPrice) / entryPrice) * 100;
+        }
+      
+        return profitPct;
+      }
     generateSignals(data) {
         const { open, high, low, close, time, volume} = data;
         // Calculate indicators
@@ -74,16 +94,16 @@ class SupertrendAI {
             // tp1: tp2: tp3: ,sl: , qntity:
             if (Sbull) {
                 signal = { signal: 'Smart Buy', bullish:true};
-                this.activeSignal = signal;
+                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (Sbear) {
                 signal = {  signal: 'Smart Sell', bullish:false};
-                this.activeSignal = signal;
+                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (bull) { 
                 signal = {  signal: 'Buy', bullish:true };
-                this.activeSignal = signal;
+                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (bear) {
                 signal = {  signal: 'Sell', bullish:false };
-                this.activeSignal = signal;
+                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
             }
         
             const candle = { 

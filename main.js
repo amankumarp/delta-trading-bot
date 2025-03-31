@@ -23,7 +23,7 @@ function main(){
     console.log('Bot is running');
     clearInterval(clock);
     clock = setInterval(function (){
-        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=${config.TIMEFRAME}`)
+        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
         .then((response)=>{
             let candle = response.data.candles[0];
             let prevCandle = response.data.candles[1];
@@ -39,8 +39,8 @@ function main(){
                 lastCandleTimestamp = candletimestamp;
                 console.log('New Candle Detected');
                 console.log('Signal:', candle);
-
-                if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)){
+                
+                if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null){
                     telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),"trail");
                 }
 
