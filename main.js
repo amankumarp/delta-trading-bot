@@ -41,11 +41,11 @@ function main(){
                 console.log('Signal:', candle);
                 
                 if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null){
-                    await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),"trail");
+                    await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),`profit:${candle.profit}%`);
                 }
 
                 if(candle.exit_signal && prevTrade!=null) {
-                    await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close,0 ,"exit");
+                    await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close, candle.profit+"%" ,"exit");
                     prevTrade =null;
                 }
 

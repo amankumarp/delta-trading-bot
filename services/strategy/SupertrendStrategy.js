@@ -1,4 +1,4 @@
-const { formatTimestamp } = require('./utils');
+const { formatTimestamp , calculateProfitPercentage} = require('./utils');
 const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI, calculateMACD, calculateSupertrend,calculateSupportResistance, calculateLowest, calculateHighest} = require('./indicators/index');
 
 class SupertrendAI {
@@ -17,27 +17,7 @@ class SupertrendAI {
         this.trend = [];
         this.activeSignal=null;
     }
-    calculateProfitPercentage(exitSignal) {
-        const exitPrice = exitSignal.price;
-        const activeTrade = exitSignal.active;
-        
-        if (!activeTrade || typeof activeTrade.entryPrice === 'undefined') {
-          throw new Error("Active trade information with entryPrice is required");
-        }
-      
-        const entryPrice = activeTrade.entryPrice;
-      
-        let profitPct;
-        if (activeTrade.bullish) {
-          // For BUY orders, profit if exit price is higher than entry price.
-          profitPct = ((exitPrice - entryPrice) / entryPrice) * 100;
-        } else {
-          // For SELL orders, profit if exit price is lower than entry price.
-          profitPct = ((entryPrice - exitPrice) / entryPrice) * 100;
-        }
-      
-        return profitPct;
-      }
+    
     generateSignals(data) {
         const { open, high, low, close, time, volume} = data;
         // Calculate indicators
@@ -71,15 +51,17 @@ class SupertrendAI {
             let signal = null;
             let exitSignal = null;
             if(this.activeSignal){
-                if(isCrossUp[i] && !(this.activeSignal.bullish)) {
+                if(isCrossUp[i] && !(this.activeSignal.bullish)) {    
                     exitSignal = { signal: 'exit', bullish:true, price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    let profitPct = calculateProfitPercentage(exitSignal.bullish, exitSignal.active.close,exitSignal.price);
                     this.activeSignal=null;
-                    signals.push(exitSignal);
+                    signals.push({...exitSignal, profit:profitPct});
                 }
                 else if(isCrossDown[i] && (this.activeSignal.bullish)) {
                     exitSignal = { signal: 'exit', bullish:false,price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    let profitPct = calculateProfitPercentage(exitSignal.bullish, exitSignal.active.close,exitSignal.price);
                     this.activeSignal=null;
-                    signals.push(exitSignal);
+                    signals.push({...exitSignal, profit:profitPct});
                 } 
             } else{
                 if(isCrossUp[i]) {
@@ -87,7 +69,7 @@ class SupertrendAI {
     
                 }
                 else if(isCrossDown[i]) {
-                    signal = { signal: 'cross Down', bullish:false,price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    signal = { signal: 'cross Down', bullish:false, price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
       
                 } 
             }
@@ -124,7 +106,8 @@ class SupertrendAI {
                 // resistance: this.highest[i],
                 exit_signal:exitSignal?'exit':null,
                 new_signal:signal?signal.signal:null,
-                bullish:signal?signal.bullish:null
+                bullish:signal?signal.bullish:null,
+                profit: this.activeSignal?calculateProfitPercentage(this.activeSignal.bullish, this.activeSignal.close, close[i]):null,
             }
             if (signal) signals.push({time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal});   
             candles.push(candle);

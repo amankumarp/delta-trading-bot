@@ -21,6 +21,18 @@ function formatTimestamp(timestamp) {
   });
 }
 
+function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
+              
+  let profitPct;
+  if (isBullish) {
+    // For BUY orders, profit if exit price is higher than entry price.
+    profitPct = Number(((currentPrice - entryPrice) / entryPrice) * 100).toFixed(2);
+  } else {
+    // For SELL orders, profit if exit price is lower than entry price.
+    profitPct = Number(((entryPrice - currentPrice) / entryPrice) * 100).toFixed(2);
+  }
 
+  return profitPct;
+}
 
-module.exports = { convertOHLCVtoArray,formatTimestamp };
+module.exports = { convertOHLCVtoArray,formatTimestamp ,calculateProfitPercentage};
