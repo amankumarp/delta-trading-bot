@@ -24,7 +24,7 @@ function main(){
     clearInterval(clock);
     clock = setInterval(function (){
         axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
-        .then((response)=>{
+        .then(async (response)=>{
             let candle = response.data.candles[0];
             let prevCandle = response.data.candles[1];
             if(response.data.signal[0]&& response.data.signal[0].signal!="exit"){
@@ -41,18 +41,18 @@ function main(){
                 console.log('Signal:', candle);
                 
                 if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null){
-                    telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),"trail");
+                    await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),"trail");
                 }
 
                 if(candle.exit_signal && prevTrade!=null) {
-                    telegramService.getExitNotificationMessage(config.SYMBOL,candle.close,0 ,"exit");
+                    await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close,0 ,"exit");
                     prevTrade =null;
                 }
 
                 if(candle.bullish==true){
                     // Place Buy Order
                     prevTrade = candle;
-                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, 
+                    await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, 
                     candle.close, 
                     "", 
                     Number(candle.supertrend).toFixed(2)
@@ -63,7 +63,7 @@ function main(){
                 if(candle.bullish==false){
                     // Place Sell Order
                     prevTrade = candle;
-                    telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
+                    await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
                 }
                 prevCandle = candle;
