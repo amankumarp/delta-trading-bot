@@ -50,16 +50,17 @@ class SupertrendAI {
             
             let signal = null;
             let exitSignal = null;
+            let profitPct = 0;
             if(this.activeSignal){
                 if(isCrossUp[i] && !(this.activeSignal.bullish)) {    
-                    exitSignal = { signal: 'exit', bullish:true, price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
-                    let profitPct = calculateProfitPercentage(exitSignal.active.bullish, exitSignal.active.close, exitSignal.price);
+                    exitSignal = { time:time[i],signal: 'exit', bullish:true, price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    profitPct = calculateProfitPercentage(exitSignal.active.bullish, exitSignal.active.close, exitSignal.price);
                     this.activeSignal=null;
                     signals.push({...exitSignal, profit:profitPct});
                 }
                 else if(isCrossDown[i] && (this.activeSignal.bullish)) {
-                    exitSignal = { signal: 'exit', bullish:false,price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
-                    let profitPct = calculateProfitPercentage(exitSignal.active.bullish, exitSignal.active.close, exitSignal.price);
+                    exitSignal = { time:time[i],signal: 'exit', bullish:false,price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
+                    profitPct = calculateProfitPercentage(exitSignal.active.bullish, exitSignal.active.close, exitSignal.price);
                     this.activeSignal=null;
                     signals.push({...exitSignal, profit:profitPct});
                 } 
@@ -87,7 +88,7 @@ class SupertrendAI {
                 signal = {  signal: 'Sell', bullish:false };
                 this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
             }
-        
+            
             const candle = { 
                 time:time[i],
                 datetime:formatTimestamp(time[i]),
@@ -107,7 +108,7 @@ class SupertrendAI {
                 exit_signal:exitSignal?'exit':null,
                 new_signal:signal?signal.signal:null,
                 bullish:signal?signal.bullish:null,
-                profit: this.activeSignal?calculateProfitPercentage(this.activeSignal.bullish, this.activeSignal.close, close[i]):null,
+                profit: (this.activeSignal?calculateProfitPercentage(this.activeSignal.bullish, this.activeSignal.close, close[i]):null)|| profitPct,
             }
             if (signal) signals.push({time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal});   
             candles.push(candle);
