@@ -113,8 +113,6 @@ class SupertrendAI {
                 rsi:this.rsi[i],
                 macd:this.macd[i]?.histogram,
                 supertrend:this.supertrend[i],
-                // support: this.lowest[i],
-                // resistance: this.highest[i],
                 partial_exit:partialExit?"partial_exit":null,
                 exit_signal:exitSignal?'exit':null,
                 new_signal:signal?signal.signal:null,

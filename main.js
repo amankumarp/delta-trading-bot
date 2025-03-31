@@ -12,9 +12,6 @@ const telegramService = new TelegramService(config.botToken, config.chatId);
 const exchagneService = new ExchangeService(config.apiKey, config.apiSecret);
 const marketDataService = new MarketDataService();
 const strategyService = new SupertrendAI();
-// function main(){
-//     telegramService.getTradeSignalMessage("smart","BTCUSD","32343","2343234","<b>234234<b>");
-// }
 
 let lastCandleTimestamp = 0;
 var clock; 
@@ -43,20 +40,25 @@ function main(){
                 lastCandleTimestamp = candletimestamp;
                 console.log('New Candle Detected');
                 console.log('Signal:', candle);
+
                 
-                if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null && candle.bullish===null){
-                    await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),`Profit: ${candle.profit}%`);
+                if(candle.exit_signal!=null && prevTrade!=null) {
+                    console.log("exit called!")
+                    await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close, candle.profit,"exit");
+                    prevTrade = null;
                 }
 
-                if(candle.exit_signal && prevTrade!=null) {
-                    await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close, candle.profit,"exit");
-                    prevTrade =null;
-                }
-                if(candle.partial_exit && prevTrade!=null){
+                if(candle.partial_exit!=null && prevTrade!=null){
+                    console.log("partial_exit called!")
                     await telegramService.getPartialExitMessage(config.SYMBOL, candle.close, "60%", "40%");
                 }
 
+                if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null && candle.bullish===null && candle.partial_exit==null){
+                    await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),`Profit: ${candle.profit}%`);
+                }
+
                 if(candle.bullish==true){
+                    console.log("buy order called!")
                     // Place Buy Order
                     prevTrade = candle;
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, 
@@ -69,6 +71,7 @@ function main(){
                 }
                 if(candle.bullish==false){
                     // Place Sell Order
+                    console.log("sell order called!")
                     prevTrade = candle;
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
@@ -79,7 +82,7 @@ function main(){
         .catch((error)=>{
             console.log(error);
         })
-    },  1000);
+    },  100);
 }
 
 main();
