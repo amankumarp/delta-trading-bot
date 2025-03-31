@@ -27,11 +27,12 @@ function main(){
         .then(async (response)=>{
             let candle = response.data.candles[0];
             let prevCandle = response.data.candles[1];
-            if(response.data.signal[0]&& response.data.signal[0].signal!="exit" && prevCandle.time != prevTrade.time){
+            if(response.data.signal[0]&& response.data.signal[0].signal!="exit"){
                 prevTrade = response.data.signal[0];
-            } else {
-                prevTrade = null;
-            }
+                if(prevCandle?.time == prevTrade?.time){
+                    prevTrade = null;
+                } 
+            } 
 
             let candletimestamp = candle.time;
             

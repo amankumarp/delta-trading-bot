@@ -50,7 +50,7 @@ class TelegramService {
 
     // Function for exit notification
     async getExitNotificationMessage(asset, exitPrice, profit, status) {
-        let message = `
+        let profitMessage = `
 ✅ *Trade Closed!* ✅
 💸 *Asset*: ${asset}
 📊 *Exit Price*: $${exitPrice}
@@ -59,7 +59,17 @@ class TelegramService {
 
 💪 Great job, team! Keep hustling! 🚀
         `;
-        this.sendNotification(message);
+
+        let lossMessage = `
+❌ *Trade Closed!* ❌
+💸 *Asset*: ${asset}
+📉 *Exit Price*: $${exitPrice}
+📉 *Loss*: ${profit}%
+🛑 *Status*: ${status} 🚨
+
+😔 Tough luck this time, but we’ll bounce back stronger! 💪
+                `;
+        this.sendNotification(Number(profit)>0?profitMessage:lossMessage);
     }
 
     // Function for trade signal notification
@@ -74,20 +84,8 @@ class TelegramService {
 
 🔥 Let's ride the wave! 🌊
         `;
-        this.sendNotification(message);
-    }
 
-    // Function for trade close with losses notification
-    async getTradeCloseWithLossMessage(asset, exitPrice, loss, reason) {
-        let message = `
-❌ *Trade Closed!* ❌
-💸 *Asset*: ${asset}
-📉 *Exit Price*: $${exitPrice}
-📉 *Loss*: ${loss}%
-🛑 *Reason*: ${reason} 🚨
-
-😔 Tough luck this time, but we’ll bounce back stronger! 💪
-        `;
+        
         this.sendNotification(message);
     }
 
