@@ -53,13 +53,13 @@ class SupertrendAI {
             if(this.activeSignal){
                 if(isCrossUp[i] && !(this.activeSignal.bullish)) {    
                     exitSignal = { signal: 'exit', bullish:true, price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
-                    let profitPct = calculateProfitPercentage(exitSignal.bullish, exitSignal.active.close,exitSignal.price);
+                    let profitPct = calculateProfitPercentage(exitSignal.active.bullish, exitSignal.active.close, exitSignal.price);
                     this.activeSignal=null;
                     signals.push({...exitSignal, profit:profitPct});
                 }
                 else if(isCrossDown[i] && (this.activeSignal.bullish)) {
                     exitSignal = { signal: 'exit', bullish:false,price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
-                    let profitPct = calculateProfitPercentage(exitSignal.bullish, exitSignal.active.close,exitSignal.price);
+                    let profitPct = calculateProfitPercentage(exitSignal.active.bullish, exitSignal.active.close, exitSignal.price);
                     this.activeSignal=null;
                     signals.push({...exitSignal, profit:profitPct});
                 } 
