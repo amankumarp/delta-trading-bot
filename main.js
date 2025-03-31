@@ -29,7 +29,7 @@ function main(){
             let prevCandle = response.data.candles[1];
             if(response.data.signal[0]&& response.data.signal[0].signal!="exit"){
                 prevTrade = response.data.signal[0];
-                if(prevCandle?.time == prevTrade?.time){
+                if(candle?.time==prevTrade?.time){
                     prevTrade = null;
                 } 
             } 
