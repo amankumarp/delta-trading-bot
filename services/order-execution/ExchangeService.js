@@ -1,190 +1,142 @@
-
-const axios = require('axios');
-const crypto = require('crypto');
+require("dotenv").config();
+const axios = require("axios");
+const crypto = require("crypto");
+const config = require("../../config/index");
 
 class ExchangeService {
-  constructor(apiKey, apiSecret, baseUrl = 'https://api.delta.exchange') {
-    this.apiKey = apiKey;
-    this.apiSecret = apiSecret;
-    this.baseUrl = baseUrl;
-  }
-
-  // Utility: Generate authentication headers (adjust signing logic as needed)
-  generateHeaders(endpoint, method, body = '') {
-    const timestamp = Date.now().toString();
-    // Payload structure may differ – refer to the latest docs for details.
-    const payload = `${timestamp}${method}${endpoint}${body}`;
-    const signature = crypto.createHmac('sha256', this.apiSecret)
-                            .update(payload)
-                            .digest('hex');
-    return {
-      'api-key': this.apiKey,
-      'timestamp': timestamp,
-      'signature': signature,
-      'Content-Type': 'application/json'
-    };
-  }
-
-  // 1) Order functions
-  async placeOrder(order) {
-    const endpoint = '/v2/orders';
-    const url = `${this.baseUrl}${endpoint}`;
-    const body = JSON.stringify(order);
-    const headers = this.generateHeaders(endpoint, 'POST', body);
-    try {
-      const response = await axios.post(url, body, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error placing order:', error.response?.data || error.message);
-      throw error;
+    constructor(apiKey, apiSecret) {
+        this.apiKey = apiKey;
+        this.apiSecret = apiSecret;
+        this.baseUrl = config.EXCHANGE_API;
     }
-  }
 
-  async editOrder(orderId, modifications) {
-    const endpoint = `/v2/orders/${orderId}`;
-    const url = `${this.baseUrl}${endpoint}`;
-    const body = JSON.stringify(modifications);
-    const headers = this.generateHeaders(endpoint, 'PUT', body);
-    try {
-      const response = await axios.put(url, body, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error editing order:', error.response?.data || error.message);
-      throw error;
+    /**
+     * Generate HMAC SHA256 signature
+     * @param {string} secret - API secret key
+     * @param {string} message - String to sign
+     * @returns {string} - HMAC SHA256 signature
+     */
+    generateSignature(secret, message) {
+        return crypto.createHmac("sha256", secret).update(message).digest("hex");
     }
-  }
 
-  async cancelOrder(orderId) {
-    const endpoint = `/v2/orders/${orderId}`;
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.generateHeaders(endpoint, 'DELETE');
-    try {
-      const response = await axios.delete(url, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error canceling order:', error.response?.data || error.message);
-      throw error;
+    /**
+     * Make an authenticated API request
+     * @param {string} method - HTTP method (GET, POST, etc.)
+     * @param {string} path - API endpoint path
+     * @param {object} query - Query parameters
+     * @param {object} body - Request body
+     */
+    async sendRequest(method, path, query = {}, body = {}) {
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const queryString = new URLSearchParams(query).toString();
+        const fullPath = queryString ? `${path}?${queryString}` : path;
+        const payload = method === "GET" ? "" : JSON.stringify(body);
+        const signatureData = method + timestamp + "/v2" + fullPath + payload;
+        const signature = this.generateSignature(this.apiSecret, signatureData);
+
+        const headers = {
+            "api-key": this.apiKey,
+            "timestamp": timestamp,
+            "signature": signature,
+            "User-Agent": "node-rest-client",
+            "Content-Type": "application/json",
+        };
+
+        try {
+            const response = await axios({
+                method,
+                url: `${this.baseUrl}${fullPath}`,
+                headers,
+                data: method === "GET" ? undefined : body,
+                params: method === "GET" ? query : undefined,
+                timeout: 30000, // 30s timeout
+            });
+            return response.data;
+        } catch (error) {
+            console.error("Error:", error.response ? error.response.data : error.message);
+            throw new Error(`Request failed: ${error.message}`);
+        }
     }
-  }
 
-  // 2) Position management functions
-
-  // Modify position (e.g., adjust margin)
-  async modifyPosition(positionId, marginChange) {
-    const endpoint = `/v2/positions/${positionId}/margin`;
-    const url = `${this.baseUrl}${endpoint}`;
-    const body = JSON.stringify({ margin: marginChange });
-    const headers = this.generateHeaders(endpoint, 'POST', body);
-    try {
-      const response = await axios.post(url, body, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error modifying position:', error.response?.data || error.message);
-      throw error;
+    async getCandles(symbol, interval, start, end) {
+        return this.sendRequest('GET', '/history/candles', { symbol, resolution: interval, start, end });
     }
-  }
 
-  // Exit (close) a single position
-  async exitPosition(positionId) {
-    const endpoint = `/v2/positions/${positionId}/close`;
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.generateHeaders(endpoint, 'POST');
-    try {
-      const response = await axios.post(url, {}, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error exiting position:', error.response?.data || error.message);
-      throw error;
+    async getProduct(symbol) {
+        return this.sendRequest('GET', `/products/${symbol}`);
     }
-  }
 
-  // Exit all positions
-  async exitAllPositions() {
-    const endpoint = '/v2/positions/close_all';
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.generateHeaders(endpoint, 'POST');
-    try {
-      const response = await axios.post(url, {}, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error exiting all positions:', error.response?.data || error.message);
-      throw error;
+    async getProducts() {
+        return this.sendRequest('GET', '/products');
     }
-  }
 
-  // Trailing stop loss (assumes API supports a trailing stop order creation)
-  async trailingStopLoss(orderId, trailingParams) {
-    // trailingParams could include { trailValue, triggerPrice, ... }
-    const endpoint = `/v2/orders/${orderId}/trailing_stop`;
-    const url = `${this.baseUrl}${endpoint}`;
-    const body = JSON.stringify(trailingParams);
-    const headers = this.generateHeaders(endpoint, 'POST', body);
-    try {
-      const response = await axios.post(url, body, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error setting trailing stop loss:', error.response?.data || error.message);
-      throw error;
+    async getAssets() {
+        return this.sendRequest('GET', '/assets');
     }
-  }
 
-  // Exit partial quantity from an open position
-  async exitPartialQuantity(positionId, quantity) {
-    // This implementation assumes an endpoint exists to close a partial quantity.
-    // Some platforms require you to modify or split the position.
-    const endpoint = `/v2/positions/${positionId}/close_partial`;
-    const url = `${this.baseUrl}${endpoint}`;
-    const body = JSON.stringify({ quantity });
-    const headers = this.generateHeaders(endpoint, 'POST', body);
-    try {
-      const response = await axios.post(url, body, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error exiting partial quantity:', error.response?.data || error.message);
-      throw error;
+    async getOrderBook(symbol) {
+        try {
+            const response = await this.sendRequest('GET', `/l2orderbook/${symbol}`);
+            let bestBuy = response.result.buy.sort((a, b) => b.price - a.price)[0];
+            let bestSell = response.result.sell.sort((a, b) => a.price - b.price)[0];
+            console.info(`Fetched order book for ${symbol} successfully`);
+            return { bestBuy, bestSell };
+        } catch (error) {
+            console.error(`Error fetching order book: ${error.message}`);
+            throw new Error('Failed to fetch order book');
+        }
     }
-  }
 
-  // 3) Account and order information
-
-  async getAccountBalance() {
-    const endpoint = '/v2/wallet/balances';
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.generateHeaders(endpoint, 'GET');
-    try {
-      const response = await axios.get(url, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching account balance:', error.response?.data || error.message);
-      throw error;
+    async getWalletBalances() {
+        return this.sendRequest('GET', '/wallet/balances');
     }
-  }
 
-  async getPendingOrders() {
-    const endpoint = '/v2/orders';
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.generateHeaders(endpoint, 'GET');
-    try {
-      const response = await axios.get(url, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching pending orders:', error.response?.data || error.message);
-      throw error;
+    async getOrders() {
+        console.info('Fetching pending orders');
+        return this.sendRequest('GET', '/orders');
     }
-  }
 
-  async getPositions() {
-    const endpoint = '/v2/positions';
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = this.generateHeaders(endpoint, 'GET');
-    try {
-      const response = await axios.get(url, { headers });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching positions:', error.response?.data || error.message);
-      throw error;
+    async placeOrder(symbol, side, quantity, price, type = 'market_order', stopLoss, takeProfit) {
+        const orderPayload = {
+            product_symbol: symbol,
+            side,
+            size: quantity,
+            limit_price: type === 'limit_order' ? price : undefined,
+            order_type: type,
+            stop_loss: stopLoss,
+            take_profit: takeProfit
+        };
+        return this.sendRequest('POST', '/orders', {}, orderPayload);
     }
-  }
+
+    async editOrder(orderId, price) {
+        return this.sendRequest('PUT', `/orders/${orderId}`, { price });
+    }
+
+    async cancelOrder(orderId) {
+        return this.sendRequest('DELETE', `/orders/${orderId}`);
+    }
+
+    async cancelAllOrders() {
+        return this.sendRequest('DELETE', '/orders/all');
+    }
+
+    async getMarginedPositions() {
+        return this.sendRequest('GET', '/positions/margined');
+    }
+
+    async getPositions(underlying_asset_symbol) {
+        return this.sendRequest('GET', `/positions`, { underlying_asset_symbol });
+    }
+
+    async exitAllPositions() {
+        return this.sendRequest('POST', '/positions/close_all', {}, {
+            close_all_portfolio: true,
+            close_all_isolated: true,
+            user_id: 0
+        });
+    }
 }
 
 module.exports = ExchangeService;

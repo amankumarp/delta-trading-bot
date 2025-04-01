@@ -1,7 +1,7 @@
 const axios = require('axios');
-
+const { parseIntervalToSeconds, convertOHLCVtoArray } = require('./utils'); // Import the utility function
 class MarketDataService {
-  constructor(baseUrl = 'https://api.delta.exchange') {
+  constructor(baseUrl = 'https://api.india.delta.exchange') {
     this.baseUrl = baseUrl;
   }
 
@@ -37,24 +37,34 @@ class MarketDataService {
   // Provide either a startTime and endTime or if omitted, get the previous 100 candles
   async getCandleOHLCV(symbol, timeframe, startTime = null, endTime = null) {
     // Assume Delta Exchange provides a candle endpoint such as:
-    const endpoint = `/v2/candles/${symbol}`;
-    const params = { timeframe };
-    if (startTime && endTime) {
-      params.start_time = startTime;
-      params.end_time = endTime;
-    } else {
-      // If not provided, assume API defaults to last 100 candles.
-      params.limit = 100;
-    }
+    const endpoint = `/v2/history/candles`;
+
+    const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
+    const defaultEnd = now;
+    const defaultStart = now - 200 * parseIntervalToSeconds(timeframe); // Previous 100 candles
+    const params= {
+      symbol,
+      resolution: timeframe,
+      start: startTime || defaultStart,
+      end: endTime || defaultEnd,
+    };
+
     const url = `${this.baseUrl}${endpoint}`;
     try {
       const response = await axios.get(url, { params });
-      return response.data;
+      return response.data.result;
     } catch (error) {
       console.error('Error fetching OHLCV data:', error.response?.data || error.message);
       throw error;
     }
   }
+
+  async getReverseOHLCVArray(symbol, timeframe, startTime = null, endTime = null){
+    let ohlcv = (await this.getCandleOHLCV(symbol,timeframe, startTime, endTime)).reverse();
+    return convertOHLCVtoArray(ohlcv);
+  }
+  
 }
+
 
 module.exports = MarketDataService;

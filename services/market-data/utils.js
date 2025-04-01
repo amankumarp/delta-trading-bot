@@ -25,5 +25,15 @@ function parseIntervalToSeconds(interval) {
     }
 }
 
+function convertOHLCVtoArray(ohlcv) {
+    const high = ohlcv.map((candle) => candle.high);
+    const low = ohlcv.map((candle) => candle.low);
+    const close = ohlcv.map((candle) => candle.close);
+    const open = ohlcv.map((candle) => candle.open);
+    const volume = ohlcv.map((candle) => candle.volume);
+    const time = ohlcv.map((candle) => candle.time);
+    return { high, low, close, open, volume, time };
+  }
 
-module.exports = { formatTimestamp , parseIntervalToSeconds};
+  
+module.exports = { formatTimestamp , parseIntervalToSeconds, convertOHLCVtoArray};

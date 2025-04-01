@@ -123,8 +123,7 @@ class SupertrendAI {
             candles.push(candle);
         }
         // return {}
-        return {signals,
-            candles};
+        return {signals,candles};
     }
 }
 

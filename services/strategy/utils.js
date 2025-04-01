@@ -4,6 +4,13 @@
  * @param {Array} ohlcv - Array of OHLCV data (open, high, low, close, volume).
  * @returns {Object} - Object with arrays of high, low, close, open, volume, and time.
  */
+
+function formatTimestamp(timestamp) {
+    return new Date(timestamp * 1000).toLocaleString('en-GB', { 
+      timeZone: 'Asia/Kolkata', 
+      hour12: false 
+  });
+}
 function convertOHLCVtoArray(ohlcv) {
   const high = ohlcv.map((candle) => candle.high);
   const low = ohlcv.map((candle) => candle.low);
@@ -14,12 +21,6 @@ function convertOHLCVtoArray(ohlcv) {
   return { high, low, close, open, volume, time };
 }
 
-function formatTimestamp(timestamp) {
-    return new Date(timestamp * 1000).toLocaleString('en-GB', { 
-      timeZone: 'Asia/Kolkata', 
-      hour12: false 
-  });
-}
 
 function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
               
