@@ -1,5 +1,6 @@
 const { formatTimestamp , calculateProfitPercentage} = require('./utils');
 const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI, calculateMACD, calculateSupertrend,calculateSupportResistance, calculateLowest, calculateHighest} = require('./indicators/index');
+const { calculateJurikVolatility, calculateSessions, calculateVolatility } = require('./indicators/indicators');
 
 class SupertrendAI {
     constructor() {
@@ -25,11 +26,9 @@ class SupertrendAI {
         this.ema200 = calculateEMA(close, 200);
         this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA
         this.rsi = calculateRSI(close, 14);
-        this.macd = calculateMACD(close, 12, 26, 9);
-        // this.volatility  = calculateVolatility(high, low, close, 10,20);
-        // console.log(this.volatility);
-        // this.lowest = calculateLowest(low, 20);
-        // this.highest = calculateHighest(high, 20);
+        this.volatility = calculateJurikVolatility(close,14,2);
+        this.sessions = calculateSessions(time);
+        this.volatilityMillionMoves = calculateVolatility(high,low,close);
 
         // Calculate Supertrend 
         const {supertrend}= calculateSupertrend(high, low, close, this.atrLength, this.multiplier);
@@ -87,16 +86,17 @@ class SupertrendAI {
             // tp1: tp2: tp3: ,sl: , qntity:
             if (Sbull) {
                 signal = { signal: 'Smart Buy', bullish:true};
-                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i], close: close[i],       volatility: this.volatilityMillionMoves[i].volatilityStatus,session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (Sbear) {
                 signal = {  signal: 'Smart Sell', bullish:false};
-                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i], close: close[i],       volatility: this.volatilityMillionMoves[i].volatilityStatus,session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (bull) { 
                 signal = {  signal: 'Buy', bullish:true };
-                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i], close: close[i], volatility: this.volatilityMillionMoves[i].volatilityStatus,
+                    session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (bear) {
                 signal = {  signal: 'Sell', bullish:false };
-                this.activeSignal = {time:time[i], close: close[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i], close: close[i],        volatility: this.volatilityMillionMoves[i].volatilityStatus, session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             }
             
             const candle = { 
@@ -111,7 +111,11 @@ class SupertrendAI {
                 ema200:this.ema200[i],
                 sma13:this.sma13[i],
                 rsi:this.rsi[i],
-                macd:this.macd[i]?.histogram,
+                upperBandVol:this.volatility.upValues[i],
+                lowerBandVol:this.volatility.dnValues[i],
+                priceJurik:this.volatility.priceJurikArr[i],
+                volatility: this.volatilityMillionMoves[i].volatilityStatus,
+                session:this.sessions[i],
                 supertrend:this.supertrend[i],
                 partial_exit:partialExit?"partial_exit":null,
                 exit_signal:exitSignal?'exit':null,

@@ -13,7 +13,7 @@ const MARKET_DATA_SERVICE_URL = process.env.MARKET_DATA_SERVICE_URL || 'http://l
 
 // Route to calculate Supertrend and generate signals
 app.get('/strategy/supertrend-ai', async (req, res) => {
-    const { symbol, interval } = req.query;
+    const { symbol, interval, start, end } = req.query;
 
     if (!symbol || !interval) {
         logger.warn('Missing required query parameters: symbol, interval');
@@ -23,7 +23,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
     try {
         // Fetch OHLCV data from Market Data Service
         const marketDataResponse = await axios.get(`${MARKET_DATA_SERVICE_URL}/ohlcv`, {
-            params: { symbol, interval},
+            params: { symbol, interval, start, end},
         });
      
         const ohlcv = marketDataResponse.data.reverse();

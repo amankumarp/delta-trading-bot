@@ -1,23 +1,20 @@
 const express = require('express');
-const { runBacktest } = require('./backtest');
+const BacktestService = require('./backtest');
 const logger = require('../logging/logger');
-
+const axios = require("axios");
 const app = express();
 const PORT = process.env.BACKTEST_SERVICE_PORT || 3006;
 
 app.use(express.json());
-
+const backtestService = new BacktestService();
 // Route to run a backtest
-app.post('/backtest', (req, res) => {
-    const { historicalData, initialBalance } = req.body;
-
-    if (!historicalData || !initialBalance) {
-        logger.warn('Missing required parameters: historicalData, initialBalance');
-        return res.status(400).json({ error: 'Missing required parameters: historicalData, initialBalance' });
-    }
-
+app.get('/backtest/supertrend-ai', async (req, res) => {
+    const {symbol,interval, start, end, initialBalance } = req.query;
+    console.log(req.query);
     try {
-        const results = runBacktest(historicalData, initialBalance);
+        let strategySignals = await axios.get(`http://localhost:3002/strategy/supertrend-ai?symbol=${symbol}&interval=${interval}&start=${start}&end=${end}`);
+        
+        const results = backtestService.runBacktest(strategySignals.data.candles.reverse());
         res.json(results);
     } catch (error) {
         logger.error(`Error running backtest: ${error.message}`);

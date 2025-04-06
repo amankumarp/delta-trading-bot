@@ -9,9 +9,10 @@
         "routes/*"
     ],
     "scripts": {
-        "start": "concurrently \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\" \"node main.js\"",
+        "start": "concurrently \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"  \"npm run start:backtest\" \"node main.js\"",
         "start:market-data": "nodemon services/market-data/index.js",
         "start:strategy": "nodemon services/strategy/index.js",
+        "start:backtest": "nodemon services/backtest/index.js",
         "start:order-execution": "nodemon services/order-execution/index.js",
         "test": "echo \"No tests defined yet.\" && exit 0"
     },

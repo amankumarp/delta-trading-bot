@@ -400,27 +400,116 @@ function calculateVolatility(highs,lows,closes, atrPeriod = 10, stdDevPeriod = 2
     const stdAtr = calculateStdDev(atr , stdDevPeriod); // Last 20 ATR values
     const smaAtr = calculateSMA(atr, stdDevPeriod);
 
+    return closes.map((_,i)=>{
+        const topAtrDev = smaAtr[i] + stdAtr[i] * 2;
+        const bottomAtrDev = smaAtr[i] - stdAtr[i] * 2;
+
+        const latestAtr = atr[i - 1];
+        const calcDev = (latestAtr - bottomAtrDev) / (topAtrDev - bottomAtrDev);
+        const percentVol = 40 * calcDev + 30;
+
+        let volatilityStatus;
+        if (percentVol < 35) volatilityStatus = "Very Low";
+        else if (percentVol < 50) volatilityStatus = "Low";
+        else if (percentVol < 70) volatilityStatus = "High";
+        else volatilityStatus = "Very High";
+    
+        return { percentVol, volatilityStatus };
+    }) 
     // Step 3: Compute Volatility Bands
-    const topAtrDev = smaAtr + stdAtr * 2;
-    const bottomAtrDev = smaAtr - stdAtr * 2;
+    // const topAtrDev = smaAtr + stdAtr * 2;
+    // const bottomAtrDev = smaAtr - stdAtr * 2;
+
 
     // Step 4: Normalize ATR within range
-    const latestAtr = atr[atr.length - 1];
-    const calcDev = (latestAtr - bottomAtrDev) / (topAtrDev - bottomAtrDev);
+    // const latestAtr = atr[atr.length - 1];
+    // const calcDev = (latestAtr - bottomAtrDev) / (topAtrDev - bottomAtrDev);
 
     // Step 5: Calculate Volatility Percentage
-    const percentVol = 40 * calcDev + 30;
+    // const percentVol = 40 * calcDev + 30;
 
     // Step 6: Determine Volatility Status
-    let volatilityStatus;
-    if (percentVol < 35) volatilityStatus = "Very Low";
-    else if (percentVol < 50) volatilityStatus = "Low";
-    else if (percentVol < 70) volatilityStatus = "High";
-    else volatilityStatus = "Very High";
+    // let volatilityStatus;
+    // if (percentVol < 35) volatilityStatus = "Very Low";
+    // else if (percentVol < 50) volatilityStatus = "Low";
+    // else if (percentVol < 70) volatilityStatus = "High";
+    // else volatilityStatus = "Very High";
 
-    return { percentVol, volatilityStatus };
+    // return { percentVol, volatilityStatus };
 }
 
+function calculateJurikVolatility(prices, lengthJurik = 14, smoothJurik = 2) {
+    if (prices.length < lengthJurik) {
+        throw new Error("Not enough data to calculate Jurik Volatility Bands");
+    }
+
+    let bsJurikmax = NaN;
+    let bsJurikmin = NaN;
+    let upValues = [];
+    let dnValues = [];
+    let miValues = [];
+    let priceJurikArr = [];
+
+    for (let i = 0; i < prices.length; i++) {
+        let vpriceJurik = prices[i];
+        let hpriceJurik = Math.max(...prices.slice(Math.max(0, i - lengthJurik + 1), i + 1));
+        let lpriceJurik = Math.min(...prices.slice(Math.max(0, i - lengthJurik + 1), i + 1));
+
+        let delJurik1 = hpriceJurik - (isNaN(bsJurikmax) ? hpriceJurik : bsJurikmax);
+        let delJurik2 = lpriceJurik - (isNaN(bsJurikmin) ? lpriceJurik : bsJurikmin);
+
+        let lenJurik = Math.sqrt(0.5 * (lengthJurik - 1)) * 1;
+        let k = Math.exp(Math.sqrt(1) * Math.log(lenJurik / (lenJurik + 1)));
+
+        if (delJurik1 > 0) {
+            bsJurikmax = hpriceJurik;
+        } else {
+            bsJurikmax = hpriceJurik - k * delJurik1;
+        }
+
+        if (delJurik2 < 0) {
+            bsJurikmin = lpriceJurik;
+        } else {
+            bsJurikmin = lpriceJurik - k * delJurik2;
+        }
+
+        let dnValueJurik = bsJurikmin;
+        let upValueJurik = bsJurikmax;
+        let miValueJurik = (upValueJurik + dnValueJurik) / 2.0;
+        
+        let upValueJuriks = (upValueJurik - miValueJurik) / smoothJurik;
+        let dnValueJuriks = (dnValueJurik - miValueJurik) / smoothJurik;
+        let priceJurik = (vpriceJurik - miValueJurik) / smoothJurik;
+
+        upValues.push(upValueJuriks);
+        dnValues.push(dnValueJuriks);
+        miValues.push(miValueJurik);
+        priceJurikArr.push(priceJurik);
+    }
+
+    return { upValues, dnValues, miValues, priceJurikArr };
+}
+
+function detectSession(timestamp) {
+    let date = new Date(timestamp*1000);
+    let utcHour = date.getUTCHours();
+
+    if (utcHour >= 0 && utcHour < 9) {
+        return "Asian Session";
+    } else if (utcHour >= 7 && utcHour < 16) {
+        return "London Session";
+    } else if (utcHour >= 12 && utcHour < 21) {
+        return "New York Session";
+    } else if (utcHour >= 22 || utcHour < 1) {
+        return "Sydney Session";
+    } else {
+        return "Outside Major Sessions";
+    }
+}
+
+function calculateSessions(timeArray) {
+    return timeArray.map(detectSession);
+}
 
 module.exports = {  
     calculateEMA, 
@@ -441,5 +530,7 @@ module.exports = {
     calculateLowest,
     calculateHighest,
     calculateCMF,
-    calculateVolatility
+    calculateVolatility,
+    calculateSessions,
+    calculateJurikVolatility
 };

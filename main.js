@@ -43,7 +43,7 @@ function main(){
 
                 if(candle.partial_exit!=null && prevTrade!=null){
                     console.log("partial_exit called!")
-                    await telegramService.getPartialExitMessage(config.SYMBOL, candle.close, "60%", "40%");
+                    await telegramService.getPartialExitMessage(config.SYMBOL, candle.close, "30%", "40%");
                 }
 
                 if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null && candle.bullish===null && candle.partial_exit==null){
@@ -78,7 +78,7 @@ function main(){
     },  100);
 }
 
-main();
+// main();
 
 
 function mainService(){
