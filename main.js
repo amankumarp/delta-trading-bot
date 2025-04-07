@@ -78,7 +78,7 @@ function main(){
     },  100);
 }
 
-main();
+// main();
 
 
 function mainService(){

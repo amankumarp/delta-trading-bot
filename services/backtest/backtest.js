@@ -1,10 +1,18 @@
 const math = require("mathjs");
 
 class BacktestService {
-    constructor(initialCapital = 10000, riskPerTrade = 0.01, commission = 0.0005) {
+    constructor({
+        initialCapital = 10000,
+        riskPerTrade = 0.01,
+        commission = 0.0005,
+        leverage = 10,
+        mode = "futures" // "spot" or "futures"
+    } = {}) {
         this.initialCapital = initialCapital;
         this.riskPerTrade = riskPerTrade;
         this.commission = commission;
+        this.leverage = leverage;
+        this.mode = mode;
         this.reset();
     }
 
@@ -13,7 +21,10 @@ class BacktestService {
         this.equityCurve = [{ timestamp: null, equity: this.initialCapital }];
         this.trades = [];
         this.sessionStats = { London: 0, NewYork: 0, Asian: 0, Other: 0 };
-        this.dayStats = { Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0 };
+        this.dayStats = {
+            Monday: 0, Tuesday: 0, Wednesday: 0,
+            Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0
+        };
         this.profitableDays = 0;
         this.losingDays = 0;
         this.dailyReturns = {};
@@ -49,7 +60,6 @@ class BacktestService {
         this.losingDays = losingDays;
     }
 
-
     getBestTradingSession() {
         return Object.entries(this.sessionStats).sort((a, b) => b[1] - a[1])[0];
     }
@@ -59,10 +69,10 @@ class BacktestService {
     }
 
     executeTrade(signal, price, timestamp) {
-        let positionSize = this.equity * this.riskPerTrade;
-        
+        const positionSize = (this.equity * this.riskPerTrade * this.leverage) / price;
+
         if (signal === "buy" || signal === "sell") {
-            if (this.openTrade) return; // Ignore if trade is already open
+            if (this.openTrade) return;
 
             this.openTrade = {
                 entryPrice: price,
@@ -71,35 +81,44 @@ class BacktestService {
                 entryTimestamp: timestamp
             };
         } else if (signal === "exit" || signal === "partial_exit") {
-            if (!this.openTrade) return; // No open trade to close
+            if (!this.openTrade) return;
 
-            let pnl = this.openTrade.isLong
-                ? (price - this.openTrade.entryPrice) * this.openTrade.positionSize
-                : (this.openTrade.entryPrice - price) * this.openTrade.positionSize;
+            const { entryPrice, positionSize, isLong, entryTimestamp } = this.openTrade;
 
-            let commissionCost = (this.openTrade.entryPrice + price) * this.openTrade.positionSize * this.commission;
-            pnl -= commissionCost; // Deduct commission
-            
-            let date = new Date(timestamp);
-            let session = this.detectSession(timestamp);
-            let day = date.toLocaleString("en-US", { weekday: "long" });
-            
+            let pnl = isLong
+                ? (price - entryPrice) * positionSize
+                : (entryPrice - price) * positionSize;
+
+            if (this.mode === "spot") {
+                pnl = Math.max(-this.equity, pnl);
+            }
+
+            const commissionCost = (entryPrice + price) * positionSize * this.commission;
+            pnl -= commissionCost;
+
+            const date = new Date(timestamp);
+            const session = this.detectSession(timestamp);
+            const day = date.toLocaleString("en-US", { weekday: "long" });
+            const dayStr = date.toISOString().split("T")[0];
+
             this.sessionStats[session] += pnl;
             this.dayStats[day] += pnl;
-            const dayString = date.toISOString().split("T")[0];
-            this.dailyReturns[dayString] = (this.dailyReturns[dayString] || 0) + pnl;
-    
+            this.dailyReturns[dayStr] = (this.dailyReturns[dayStr] || 0) + pnl;
+
             this.updateDailyPerformance();
-    
-            let closedTrade = {
-                entryPrice: this.openTrade.entryPrice,
+
+            const closedTrade = {
+                entryPrice,
                 exitPrice: price,
                 pnl,
-                positionSize: this.openTrade.positionSize,
+                positionSize,
                 isWin: pnl > 0,
                 isPartial: signal === "partial_exit",
-                entryTimestamp: this.openTrade.entryTimestamp,
-                exitTimestamp: timestamp
+                entryTimestamp,
+                exitTimestamp: timestamp,
+                isLong,
+                leverage: this.leverage,
+                commission: commissionCost
             };
 
             this.trades.push(closedTrade);
@@ -126,21 +145,23 @@ class BacktestService {
             this.updateDrawdown();
             this.updatePeakReturns();
 
-            // Calculate Holding Period
-            let holdingTime = (new Date(timestamp) - new Date(this.openTrade.entryTimestamp)) / (1000 * 60 * 60 * 24);
+            const holdingTime = (new Date(timestamp) - new Date(entryTimestamp)) / (1000 * 60 * 60 * 24);
             this.holdingPeriods.push(holdingTime);
 
             if (signal === "exit") {
-                this.openTrade = null; // Fully close trade
+                this.openTrade = null;
             } else {
-                this.openTrade.positionSize *= 0.5; // Reduce position on partial exit
+                this.openTrade.positionSize *= 0.5;
             }
         }
+
+        if (!this.startDate) this.startDate = timestamp;
+        this.endDate = timestamp;
     }
 
     updateDrawdown() {
-        let peak = Math.max(...this.equityCurve.map(e => e.equity));
-        let drawdown = (peak - this.equity) / peak;
+        const peak = Math.max(...this.equityCurve.map(e => e.equity));
+        const drawdown = (peak - this.equity) / peak;
         this.drawdowns.push(drawdown);
         this.maxDrawdown = Math.max(this.maxDrawdown, drawdown);
     }
@@ -152,7 +173,6 @@ class BacktestService {
     detectSession(timestamp) {
         const date = new Date(timestamp);
         const utcHour = date.getUTCHours();
-
         if (utcHour >= 0 && utcHour < 9) return "Asian";
         if (utcHour >= 8 && utcHour < 17) return "London";
         if (utcHour >= 13 && utcHour < 22) return "NewYork";
@@ -163,16 +183,36 @@ class BacktestService {
         const totalTrades = this.trades.length;
         const avgProfit = this.totalWins > 0 ? this.totalProfit / this.totalWins : 0;
         const avgLoss = this.totalLosses > 0 ? this.totalLoss / this.totalLosses : 0;
-        const totalReturn = ((this.equity - this.initialCapital) / this.initialCapital) * 100;
+        const equityChangePct = ((this.equity - this.initialCapital) / this.initialCapital) * 100;
         const totalDays = (new Date(this.endDate) - new Date(this.startDate)) / (1000 * 60 * 60 * 24);
         const avgHoldingTime = this.holdingPeriods.length > 0 ? math.mean(this.holdingPeriods) : 0;
-        const sharpeRatio = this.totalLosses > 1 ? math.mean(this.trades.map(t => t.pnl)) / math.std(this.trades.map(t => t.pnl)) : 0;
+        const returns = this.trades.map(t => t.pnl);
+        const sharpeRatio = returns.length > 1 ? math.mean(returns) / (math.std(returns) || 1) : 0;
         const bestTradingSession = this.getBestTradingSession();
         const bestTradingDay = this.getBestTradingDay();
+
+        let marketChangePct = 0;
+        let relativePerformance = 0;
+
+        if (this.trades.length > 0) {
+            const firstPrice = this.trades[0].entryPrice;
+            const lastTrade = this.trades[this.trades.length - 1];
+            const lastPrice = lastTrade.exitPrice || lastTrade.entryPrice;
+            marketChangePct = ((lastPrice - firstPrice) / firstPrice) * 100;
+            relativePerformance = equityChangePct - marketChangePct;
+        }
+
         return {
+            mode: this.mode,
+            leverage: this.leverage,
             finalEquity: this.equity,
-            profitableDays:this.profitableDays,
-            losingDays:this.losingDays,
+            startDate: this.startDate,
+            endDate: this.endDate,
+            marketChangePct,
+            equityChangePct,
+            relativePerformance,
+            profitableDays: this.profitableDays,
+            losingDays: this.losingDays,
             bestTradingSession,
             bestTradingDay,
             totalDays,
@@ -183,8 +223,8 @@ class BacktestService {
             biggestWin: this.biggestWin,
             biggestLoss: this.biggestLoss,
             avgProfit,
-            avgLoss, 
-            totalReturn,
+            avgLoss,
+            totalReturn: equityChangePct,
             peakReturns: this.peakReturns,
             maxWinStreak: this.maxWinStreak,
             maxLossStreak: this.maxLossStreak,
@@ -192,19 +232,20 @@ class BacktestService {
             expectancy: avgProfit + avgLoss,
             avgHoldingTime,
             totalCommission: this.totalCommission,
-            equityCurve: this.equityCurve
+            equityCurve: this.equityCurve,
+            trades: this.trades
         };
     }
 
     runBacktest(candles) {
         this.reset();
 
-        for (let i = 1; i < candles.length; i++) {
-            let candle = candles[i];
-            if(candle.exit_signal)  this.executeTrade("exit", candle.close, candle.time)
-            if(candle.partial_exit) this.executeTrade("partial_exit", candle.close, candle.time)
-            if(candle.bullish) this.executeTrade("buy", candle.close, candle.time)
-            if(candle.bullish==false) this.executeTrade("sell", candle.close, candle.time)
+        for (let i = 0; i < candles.length; i++) {
+            const candle = candles[i];
+            if (candle.exit_signal) this.executeTrade("exit", candle.close, candle.time);
+            if (candle.partial_exit) this.executeTrade("partial_exit", candle.close, candle.time);
+            if (candle.bullish === true) this.executeTrade("buy", candle.close, candle.time);
+            if (candle.bullish === false) this.executeTrade("sell", candle.close, candle.time);
         }
 
         return this.getBacktestStats();

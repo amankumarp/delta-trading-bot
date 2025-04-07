@@ -9,8 +9,9 @@ app.use(express.json());
 const backtestService = new BacktestService();
 // Route to run a backtest
 app.get('/backtest/supertrend-ai', async (req, res) => {
-    const {symbol,interval, start, end, initialBalance } = req.query;
+    const {symbol,interval, start, end } = req.query;
     try {
+        console.log("start",start,end)
         let strategySignals = await axios.get(`http://localhost:3002/strategy/supertrend-ai?symbol=${symbol}&interval=${interval}&start=${start}&end=${end}`);
         
         const results = backtestService.runBacktest(strategySignals.data.candles.reverse());

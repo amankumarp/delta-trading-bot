@@ -1,13 +1,48 @@
 const express = require('express');
 const axios = require('axios');
-const logger = require('../logging/logger'); // Import the logger
-const { parseIntervalToSeconds } = require('./utils'); // Import the utility function
+const logger = require('../logging/logger');
+const { parseIntervalToSeconds } = require('./utils');
 const config = require('../../config/index');
+
 const app = express();
 const PORT = process.env.MARKET_DATA_PORT || 3001;
-
-const router = express.Router(); // Create a router instance
+const router = express.Router();
 const DELTA_API_BASE_URL = 'https://api.india.delta.exchange/v2';
+
+// Helper to fetch candles in chunks
+async function fetchCandleChunks(symbol, interval, start, end) {
+    const CHUNK_SIZE = 200; // Max 200 candles per request
+    const intervalSec = parseIntervalToSeconds(interval);
+    let allCandles = [];
+
+    let from = start;
+    while (from < end) {
+        const to = Math.min(from + CHUNK_SIZE * intervalSec, end);
+
+        try {
+            const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {
+                params: {
+                    symbol,
+                    resolution: interval,
+                    start: from,
+                    end: to,
+                },
+            });
+
+            const candles = response.data.result || [];
+            allCandles = allCandles.concat(candles);
+
+            if (candles.length === 0) break; // No more data
+        } catch (err) {
+            logger.error(`Chunk fetch failed: ${err.message}`);
+            break;
+        }
+
+        from = to;
+    }
+
+    return allCandles;
+}
 
 // Route to fetch OHLCV data
 router.get('/ohlcv', async (req, res) => {
@@ -19,34 +54,46 @@ router.get('/ohlcv', async (req, res) => {
     }
 
     try {
-        // Calculate default start and end timestamps if not provided
-        const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
-        const defaultEnd = now;
-        const defaultStart = now - 200 * parseIntervalToSeconds(interval); // Previous 100 candles
+        const now = Math.floor(Date.now() / 1000);
+        const intervalSec = parseIntervalToSeconds(interval);
 
-        const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {
-            params: {
-                symbol,
-                resolution: interval,
-                start: start || defaultStart,
-                end: end || defaultEnd,
-            },
-        });
-        
-        // logger.info(`Fetched OHLCV data for symbol: ${symbol}, interval: ${interval}`);
-        res.json(response.data.result);
+        const defaultEnd = now;
+        const defaultStart = now - 200 * intervalSec;
+
+        const startTime = parseInt(start) || defaultStart;
+        const endTime = parseInt(end) || defaultEnd;
+
+        let candles;
+
+        if (!start && !end) {
+            // Only 200 candles
+            const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {
+                params: {
+                    symbol,
+                    resolution: interval,
+                    start: startTime,
+                    end: endTime,
+                },
+            });
+            candles = response.data.result;
+        } else {
+            // Fetch in chunks
+            candles = await fetchCandleChunks(symbol, interval, startTime, endTime);
+        }
+
+        logger.info(`📊 Fetched ${candles.length} candles for ${symbol} (${interval})`);
+        res.json(candles);
     } catch (error) {
-        logger.error(`Error fetching OHLCV data: ${error.message}`);
+        logger.error(`❌ Error fetching OHLCV data: ${error.message}`);
         res.status(500).json({ error: 'Failed to fetch OHLCV data' });
     }
 });
 
-app.use('/api', router); // Use the router for API routes
+app.use('/api', router);
 
 // Start the server
 app.listen(PORT, () => {
-    logger.info(`Market Data Service running on port ${PORT}`);
+    logger.info(`🚀 Market Data Service running on port ${PORT}`);
 });
 
-
-module.exports = router; // Export the router
+module.exports = router;
