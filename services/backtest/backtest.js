@@ -167,9 +167,14 @@ class BacktestService {
         const totalDays = (new Date(this.endDate) - new Date(this.startDate)) / (1000 * 60 * 60 * 24);
         const avgHoldingTime = this.holdingPeriods.length > 0 ? math.mean(this.holdingPeriods) : 0;
         const sharpeRatio = this.totalLosses > 1 ? math.mean(this.trades.map(t => t.pnl)) / math.std(this.trades.map(t => t.pnl)) : 0;
-
+        const bestTradingSession = this.getBestTradingSession();
+        const bestTradingDay = this.getBestTradingDay();
         return {
             finalEquity: this.equity,
+            profitableDays:this.profitableDays,
+            losingDays:this.losingDays,
+            bestTradingSession,
+            bestTradingDay,
             totalDays,
             maxDrawdown: this.maxDrawdown,
             winRate: totalTrades > 0 ? (this.totalWins / totalTrades) * 100 : 0,
@@ -178,7 +183,7 @@ class BacktestService {
             biggestWin: this.biggestWin,
             biggestLoss: this.biggestLoss,
             avgProfit,
-            avgLoss,
+            avgLoss, 
             totalReturn,
             peakReturns: this.peakReturns,
             maxWinStreak: this.maxWinStreak,
@@ -195,13 +200,11 @@ class BacktestService {
         this.reset();
 
         for (let i = 1; i < candles.length; i++) {
-            console.log(candles[i]);
-            // let signal = 
-            // if (signal) {
-            //     let price = priceData[i].close;
-            //     let timestamp = priceData[i].timestamp;
-            //     this.executeTrade(signal, price, timestamp);
-            // }
+            let candle = candles[i];
+            if(candle.exit_signal)  this.executeTrade("exit", candle.close, candle.time)
+            if(candle.partial_exit) this.executeTrade("partial_exit", candle.close, candle.time)
+            if(candle.bullish) this.executeTrade("buy", candle.close, candle.time)
+            if(candle.bullish==false) this.executeTrade("sell", candle.close, candle.time)
         }
 
         return this.getBacktestStats();
