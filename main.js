@@ -75,7 +75,7 @@ function main(){
         .catch((error)=>{
             console.log(error);
         })
-    },  100);
+    },  1000);
 }
 
 main();

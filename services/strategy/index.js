@@ -21,7 +21,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
     }
 
     try {
-        console.log("startegy:",start,end);
+
         // Fetch OHLCV data from Market Data Service
         const marketDataResponse = await axios.get(`${MARKET_DATA_SERVICE_URL}/ohlcv`, {
             params: { symbol, interval, start, end},

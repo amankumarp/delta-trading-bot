@@ -5,7 +5,7 @@ class BacktestService {
         initialCapital = 10000,
         riskPerTrade = 0.01,
         commission = 0.0005,
-        leverage = 10,
+        leverage = 20,
         mode = "futures" // "spot" or "futures"
     } = {}) {
         this.initialCapital = initialCapital;
@@ -184,7 +184,7 @@ class BacktestService {
         const avgProfit = this.totalWins > 0 ? this.totalProfit / this.totalWins : 0;
         const avgLoss = this.totalLosses > 0 ? this.totalLoss / this.totalLosses : 0;
         const equityChangePct = ((this.equity - this.initialCapital) / this.initialCapital) * 100;
-        const totalDays = (new Date(this.endDate) - new Date(this.startDate)) / (1000 * 60 * 60 * 24);
+        const totalDays = (new Date(this.endDate*1000) - new Date(this.startDate*1000)) / ( 1000*60 * 60 * 24);
         const avgHoldingTime = this.holdingPeriods.length > 0 ? math.mean(this.holdingPeriods) : 0;
         const returns = this.trades.map(t => t.pnl);
         const sharpeRatio = returns.length > 1 ? math.mean(returns) / (math.std(returns) || 1) : 0;

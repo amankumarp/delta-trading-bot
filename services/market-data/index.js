@@ -81,7 +81,7 @@ router.get('/ohlcv', async (req, res) => {
             candles = await fetchCandleChunks(symbol, interval, startTime, endTime);
         }
 
-        logger.info(`📊 Fetched ${candles.length} candles for ${symbol} (${interval})`);
+        // logger.info(`📊 Fetched ${candles.length} candles for ${symbol} (${interval})`);
         res.json(candles);
     } catch (error) {
         logger.error(`❌ Error fetching OHLCV data: ${error.message}`);
