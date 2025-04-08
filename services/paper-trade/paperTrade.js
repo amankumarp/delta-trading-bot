@@ -1,45 +1,102 @@
-const SupertrendAI = require('../strategy/SupertrendStrategy');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
-/**
- * Simulate paper trading using live or historical data.
- * @param {Array} liveData - Array of OHLCV data (open, high, low, close, volume).
- * @param {number} initialBalance - The starting balance for paper trading.
- * @returns {Object} - Paper trading results including trades and balance.
- */
-function runPaperTrade(liveData, initialBalance = 10000) {
-    const strategy = new SupertrendAI();
-    const { high, low, close } = liveData;
+class TradeEngine {
+    constructor({ initialBalance = 10000, leverage = 1, mode = 'futures' }) {
+        this.balance = initialBalance;
+        this.leverage = leverage;
+        this.mode = mode;
+        this.positions = []; // multiple open trades allowed
+    }
 
-    // Generate signals
-    const signals = strategy.generateSignals({ high, low, close });
+    async openPosition({ symbol, price, size, isLong, sl, tp }) {
+        const position = await prisma.trade.create({
+            data: {
+                symbol,
+                isLong,
+                entryPrice: price,
+                positionSize: size,
+                status: 'open',
+                entryTime: new Date(),
+                stopLoss: sl,
+                takeProfit: tp
+            }
+        });
+        this.positions.push(position);
+        return position;
+    }
 
-    let balance = initialBalance;
-    let position = null;
-    const trades = [];
+    async closePosition(positionId, exitPrice) {
+        const position = await prisma.trade.findUnique({ where: { id: positionId } });
+        if (!position || position.status === 'closed') return null;
 
-    for (const signal of signals) {
-        const price = close[signal.index];
+        const pnl = position.isLong
+            ? (exitPrice - position.entryPrice) * position.positionSize
+            : (position.entryPrice - exitPrice) * position.positionSize;
 
-        if (signal.type === 'buy' && !position) {
-            // Open a long position
-            position = { entryPrice: price, type: 'long' };
-            trades.push({ type: 'buy', price, index: signal.index });
-        } else if (signal.type === 'sell' && position && position.type === 'long') {
-            // Close the long position
-            const profit = price - position.entryPrice;
-            balance += profit;
-            trades.push({ type: 'sell', price, index: signal.index, profit });
-            position = null;
+        this.balance += pnl;
+
+        const updated = await prisma.trade.update({
+            where: { id: positionId },
+            data: {
+                exitPrice,
+                pnl,
+                status: 'closed',
+                exitTime: new Date()
+            }
+        });
+
+        this.positions = this.positions.filter(p => p.id !== positionId);
+        return updated;
+    }
+
+    async partialExit(positionId, exitPrice) {
+        const position = await prisma.trade.findUnique({ where: { id: positionId } });
+        if (!position || position.status !== 'open') return null;
+
+        const halfSize = position.positionSize / 2;
+        const pnl = position.isLong
+            ? (exitPrice - position.entryPrice) * halfSize
+            : (position.entryPrice - exitPrice) * halfSize;
+
+        this.balance += pnl;
+
+        await prisma.trade.update({
+            where: { id: positionId },
+            data: {
+                positionSize: halfSize,
+                updatedAt: new Date()
+            }
+        });
+
+        return { pnl, newSize: halfSize };
+    }
+
+    async handlePriceUpdate(symbol, currentPrice) {
+        const openPositions = await prisma.trade.findMany({
+            where: {
+                symbol,
+                status: 'open'
+            }
+        });
+
+        for (const pos of openPositions) {
+            const hitSL = pos.isLong ? currentPrice <= pos.stopLoss : currentPrice >= pos.stopLoss;
+            const hitTP = pos.isLong ? currentPrice >= pos.takeProfit : currentPrice <= pos.takeProfit;
+
+            if (hitSL || hitTP) {
+                await this.closePosition(pos.id, currentPrice);
+            }
         }
     }
 
-    return {
-        initialBalance,
-        finalBalance: balance,
-        trades,
-        profit: balance - initialBalance,
-        profitPercentage: ((balance - initialBalance) / initialBalance) * 100,
-    };
+    getBalance() {
+        return this.balance;
+    }
+
+    async getOpenPositions() {
+        return await prisma.trade.findMany({ where: { status: 'open' } });
+    }
 }
 
-module.exports = { runPaperTrade };
+module.exports = TradeEngine;

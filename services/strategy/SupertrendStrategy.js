@@ -1,5 +1,5 @@
 const { formatTimestamp , calculateProfitPercentage} = require('./utils');
-const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI, calculateMACD, calculateSupertrend,calculateSupportResistance, calculateLowest, calculateHighest} = require('./indicators/index');
+const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI, calculateMACD, calculateSupertrend, calculateLowest, calculateHighest} = require('./indicators/index');
 const { calculateJurikVolatility, calculateSessions, calculateVolatility } = require('./indicators/indicators');
 
 class SupertrendAI {

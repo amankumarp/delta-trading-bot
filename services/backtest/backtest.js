@@ -241,7 +241,9 @@ class BacktestService {
         this.reset();
 
         for (let i = 0; i < candles.length; i++) {
+      
             const candle = candles[i];
+    
             if (candle.exit_signal) this.executeTrade("exit", candle.close, candle.time);
             if (candle.partial_exit) this.executeTrade("partial_exit", candle.close, candle.time);
             if (candle.bullish === true) this.executeTrade("buy", candle.close, candle.time);
