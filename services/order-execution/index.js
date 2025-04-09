@@ -1,21 +1,12 @@
 const express = require('express');
 const logger = require('../logging/logger');
-const {    
-    getOrders,
-    getPositions,
-    exitAllPositions,
-    getMarginedPositions,
-    getOrderBook,
-    getProduct,
-    getProducts,
-    getAssets,
-    getWalletBalances,
-    placeOrder 
-} = require('./executeOrder');
+const ExchangeService = require('./ExchangeService');
 // require('./websocketService'); // Import the WebSocket service
 
 const app = express();
 const PORT = process.env.TRADE_MANAGEMENT_SERVICE_PORT || 3005;
+ 
+const exchagneService = new ExchangeService(process.env.DELTA_API_KEY, process.env.DELTA_API_SECRET);
 
 app.use(express.json()); // Parse JSON request bodies
 

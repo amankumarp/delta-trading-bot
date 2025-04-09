@@ -5,6 +5,7 @@ const TelegramService = require("./services/notification/telegram");
 const ExchangeService = require("./services/order-execution/ExchangeService");
 const MarketDataService = require("./services/market-data/MarketDataService");
 const SupertrendAI = require("./services/strategy/SupertrendStrategy");
+const { CandleList } = require("technicalindicators");
 const telegramService = new TelegramService(config.botToken, config.chatId);
 const exchagneService = new ExchangeService(config.apiKey, config.apiSecret);
 const marketDataService = new MarketDataService();
@@ -78,7 +79,7 @@ function main(){
     },  1000);
 }
 
-main();
+// main();
 
 
 function mainService(){
@@ -148,24 +149,36 @@ function mainService(){
 
 async function checkService(){
     console.log('checking service');
-    // let product = await exchagneService.getProducts();
-    // console.log(product);
-    // let product = await exchagneService.getProduct("BTCUSD");
+    // let products = await exchagneService.getProducts();
+    // console.log(products);
+    let product = await exchagneService.getProduct("BTCUSD");
     //  console.log(product);
 
-    // let assets = await exchagneService.getAssets();
+    let assets = await exchagneService.getAssets();
     // console.log(assets);
 
-    // let orderbook = await exchagneService.getOrderBook("BTCUSD");
-    // console.log(orderbook);
+    let orderbook = await exchagneService.getOrderBook("BTCUSD");
+    console.log(orderbook);
 
     let balance = await exchagneService.getWalletBalances();
     console.log("balance:",balance.result[0].available_balance_for_robo);
 
     let orders = await exchagneService.getOrders();
     console.log("orders:",orders.result);
+    // let orderMarket = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "market_order");
+    // let stoploss = await exchagneService.bracketOrder(orderMarket.result, 82940, 0);
+    // console.log("stoploss:",stoploss.result);
 
+    let positions = await exchagneService.getMarginedPositions();
+    console.log("positions:",positions.result);
 
+    
+    // let orderLimit = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "limit_order");
+    // let orderLimit = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "limit_order");
+    // console.log("order:",orderMarket);
+
+    // let cancle = await exchagneService.cancelOrder(orders.result[0]);
+    // console.log(cancle);
 
 }
-// checkService();
+checkService();

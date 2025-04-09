@@ -10,23 +10,10 @@ class ExchangeService {
         this.baseUrl = config.EXCHANGE_API;
     }
 
-    /**
-     * Generate HMAC SHA256 signature
-     * @param {string} secret - API secret key
-     * @param {string} message - String to sign
-     * @returns {string} - HMAC SHA256 signature
-     */
     generateSignature(secret, message) {
         return crypto.createHmac("sha256", secret).update(message).digest("hex");
     }
 
-    /**
-     * Make an authenticated API request
-     * @param {string} method - HTTP method (GET, POST, etc.)
-     * @param {string} path - API endpoint path
-     * @param {object} query - Query parameters
-     * @param {object} body - Request body
-     */
     async sendRequest(method, path, query = {}, body = {}) {
         const timestamp = Math.floor(Date.now() / 1000).toString();
         const queryString = new URLSearchParams(query).toString();
@@ -96,26 +83,106 @@ class ExchangeService {
         console.info('Fetching pending orders');
         return this.sendRequest('GET', '/orders');
     }
+    
 
-    async placeOrder(symbol, side, quantity, price, type = 'market_order', stopLoss, takeProfit) {
+    async exitOrder(product_id, exit_lots, side) {
+        // if order is sell then side is buy or if order is buy then side is sell
+        const order = {
+            "product_id":product_id,
+            "size":exit_lots,
+            "order_type":"market_order",
+            "reduce_only":true,
+            "cancel_orders_accepted":"true",
+            "side":side
+        };
+
+        return this.sendRequest('POST', `/orders`, {}, order);
+    }
+
+    async editOrder(order_id, product_id, stop_price) {
+        const order = {
+            "id":order_id,
+            "order_type":"market_order",
+            "product_id":product_id,
+            "stop_price":stop_price
+        };
+        return this.sendRequest('PUT', `/orders`, {}, order);
+    }
+
+    async placeOrder(symbol, side, size_lots, price, type = 'market_order', stopLoss, takeProfit) {
         const orderPayload = {
             product_symbol: symbol,
             side,
-            size: quantity,
+            size: size_lots,
             limit_price: type === 'limit_order' ? price : undefined,
             order_type: type,
-            stop_loss: stopLoss,
-            take_profit: takeProfit
+            reduce_only: false,
         };
+    
+        if (stopLoss) {
+            orderPayload.bracket_stop_trigger_method = "mark_price",
+            orderPayload.bracket_stop_loss_price = stopLoss;
+        }
+
+        if (takeProfit) {
+            orderPayload.bracket_stop_trigger_method = "mark_price",
+            orderPayload.bracket_take_profit_price = takeProfit;
+        }
+
         return this.sendRequest('POST', '/orders', {}, orderPayload);
     }
 
-    async editOrder(orderId, price) {
-        return this.sendRequest('PUT', `/orders/${orderId}`, { price });
-    }
+   async bracketOrder(symbol, stopLoss, takeProfit) {
+        const orderPayload = {
+            product_symbol:  symbol,
+            bracket_stop_trigger_method: "mark_price",
+        }
+       
+        if (stopLoss) {
+            orderPayload.stop_loss_order = {
+                order_type: "market_order",
+                stop_price: stopLoss
+            }
+        }
+        if (takeProfit) {
+            orderPayload.take_profit_order = {
+                order_type: "market_order",
+                stop_price: takeProfit
+            }
+        }
 
-    async cancelOrder(orderId) {
-        return this.sendRequest('DELETE', `/orders/${orderId}`);
+        return this.sendRequest('POST', '/orders/bracket', {}, orderPayload);
+   }
+
+   async editBracketOrder(order_id,product_id, product_symbol, order_type="market_order", stoploss, takeProfit) {
+        const orderPayload = {
+            "id": order_id,
+            "product_id": product_id,
+            "product_symbol": product_symbol,
+            "bracket_stop_trigger_method": "mark_price"
+        }
+     
+        if(stoploss) {
+            if(order_type=="limit_order"){
+                orderPayload.bracket_stop_loss_limit_price = stoploss;
+            } else {
+                orderPayload.bracket_stop_loss_price = stoploss;
+            }
+
+        } 
+        if (takeProfit) {
+            if(order_type=="limit_order"){
+                orderPayload.bracket_take_profit_limit_price = takeProfit;
+            } else {
+                orderPayload.bracket_take_profit_price = takeProfit;
+            }
+        }
+
+        return this.sendRequest('PUT', '/orders/bracket', {}, orderPayload);
+   }
+
+    async cancelOrder(order) {
+        return this.sendRequest('DELETE', `/orders`, {}, {id: order.id, product_id: order.product_id});
     }
 
     async cancelAllOrders() {
