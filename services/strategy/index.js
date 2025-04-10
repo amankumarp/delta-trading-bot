@@ -3,7 +3,7 @@ const axios = require('axios');
 
 const logger = require('../logging/logger');
 const SupertrendAI = require('./SupertrendStrategy');
-const { convertOHLCVtoArray } = require('./utils');
+const { convertOHLCVtoArray, convertOHLCVtoHeikinAshi } = require('./utils');
 
 const app = express();
 const PORT = process.env.STRATEGY_SERVICE_PORT || 3002;
@@ -28,7 +28,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         });
      
         const ohlcv = marketDataResponse.data.reverse();
-        const {open, high, low, close, time, volume } = convertOHLCVtoArray(ohlcv);
+        const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
         // convert timestamp to time formate
         const supertrendAI = new SupertrendAI();
         // console.log('open', open);

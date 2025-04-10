@@ -84,7 +84,6 @@ class ExchangeService {
         return this.sendRequest('GET', '/orders');
     }
     
-
     async exitOrder(product_id, exit_lots, side) {
         // if order is sell then side is buy or if order is buy then side is sell
         const order = {

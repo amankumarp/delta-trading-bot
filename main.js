@@ -39,6 +39,10 @@ function main(){
                 if(candle.exit_signal!=null && prevTrade!=null) {
                     console.log("exit called!")
                     await telegramService.getExitNotificationMessage(config.SYMBOL,candle.close, candle.profit,"exit");
+                    let position = await getPosition(config.SYMBOL);
+                    if(position!=null){
+                        await exchagneService.exitOrder(position.product_id, -Number(position.size), Number(position.size) < 0 ? "buy" : "sell");
+                    }
                     prevTrade = null;
                 }
 
@@ -49,6 +53,11 @@ function main(){
 
                 if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null && candle.bullish===null && candle.partial_exit==null){
                     await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),`Profit: ${candle.profit}%`);
+                    let slOrder = await getSLOrder();
+                    if(slOrder!=null){
+                        await exchagneService.editOrder(slOrder.order_id, slOrder.product_id, Number(candle.supertrend).toFixed(2));    
+                    }
+                    console.log("edit order called!")
                 }
 
                 if(candle.bullish==true){
@@ -60,7 +69,9 @@ function main(){
                     "", 
                     Number(candle.supertrend).toFixed(2)
                     );
-                    // placeOrder(config.SYMBOL, 'buy', 10, candle.close, 'limit_order', sl = candle.supertrend);
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 1, 10000, "market_order",Number(candle.supertrend).toFixed(2));
+                    console.log("orderMarket:",orderMarket.result);
+        
 
                 }
                 if(candle.bullish==false){
@@ -69,6 +80,9 @@ function main(){
                     prevTrade = candle;
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
+
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order",Number(candle.supertrend).toFixed(2));
+                    console.log("orderMarket:",orderMarket.result);
                 }
                 prevCandle = candle;
             }
@@ -78,6 +92,8 @@ function main(){
         })
     },  1000);
 }
+
+
 
 // main();
 
@@ -145,11 +161,49 @@ function mainService(){
     },  1000);
 }
 
+
+
+
+
+
 // mainService();
+
+
+async function getSLOrder(){
+    let orders = await exchagneService.getOrders();
+    let order = orders.result.filter((order)=>order.stop_order_type==="stop_loss_order");
+    if(order.length==0){
+        return null;
+    }
+    order = order[0];
+    return {order_id:order.id, product_id:order.product_id, exit_lots:order.size, side:order.side};
+}
+
+
+async function getTPOrder(){
+    let orders = await exchagneService.getOrders();
+    let order = orders.result.filter((order)=>order.stop_order_type==="take_profit_order");
+    if(order.length==0){
+        return null;
+    }   
+    order = order[0];
+    return {order_id:order.id, product_id:order.product_id, exit_lots:order.size, side:order.side};
+}
+
+async function getPosition(symbol) {
+    let positions = await exchagneService.getMarginedPositions();
+    let position = positions.result.filter((position)=>position.product_symbol===symbol);
+    if(position.length==0){
+        return null;
+    }
+    position = position[0];
+    return {product_id:position.product_id, size:position.size};
+}
+
 
 async function checkService(){
     console.log('checking service');
-    // let products = await exchagneService.getProducts();
+    let products = await exchagneService.getProducts();
     // console.log(products);
     let product = await exchagneService.getProduct("BTCUSD");
     //  console.log(product);
@@ -181,4 +235,4 @@ async function checkService(){
     // console.log(cancle);
 
 }
-checkService();
+// checkService();

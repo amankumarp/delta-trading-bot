@@ -11,6 +11,7 @@ function formatTimestamp(timestamp) {
       hour12: false 
   });
 }
+
 function convertOHLCVtoArray(ohlcv) {
   const high = ohlcv.map((candle) => candle.high);
   const low = ohlcv.map((candle) => candle.low);
@@ -21,6 +22,26 @@ function convertOHLCVtoArray(ohlcv) {
   return { high, low, close, open, volume, time };
 }
 
+function convertOHLCVtoHeikinAshi(ohlcv) {
+  const ha = [];
+  for (let i = 0; i < ohlcv.length; i++) {
+    const currentCandle = ohlcv[i];
+    const haOpen = i=== 0 ? currentCandle.open : (ha[i - 1].open + ha[i - 1].close) / 2;
+    const haClose = (currentCandle.open + currentCandle.high + currentCandle.low + currentCandle.close) / 4;
+    const haCandle = {
+      time: currentCandle.time,
+      open: haOpen,
+      close: haClose,
+      high: Math.max(currentCandle.high,haOpen, haClose),
+      low: Math.min(currentCandle.low, haOpen, haClose),
+      volume: currentCandle.volume
+    };
+  
+    ha.push(haCandle);
+  }
+
+  return convertOHLCVtoArray(ha);
+}
 
 function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
               
@@ -36,4 +57,4 @@ function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
   return profitPct;
 }
 
-module.exports = { convertOHLCVtoArray,formatTimestamp ,calculateProfitPercentage};
+module.exports = { convertOHLCVtoArray,formatTimestamp, convertOHLCVtoHeikinAshi, calculateProfitPercentage};
