@@ -18,7 +18,7 @@ function main(){
     console.log('Bot is running');
     clearInterval(clock);
     clock = setInterval(function (){
-        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
+        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=5m`)
         .then(async (response)=>{
             let candle = response.data.candles[0];
             let prevCandle = response.data.candles[1];
@@ -95,7 +95,7 @@ function main(){
 
 
 
-// main();
+main();
 
 
 function mainService(){
