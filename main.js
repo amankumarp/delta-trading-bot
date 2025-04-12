@@ -18,7 +18,7 @@ function main(){
     console.log('Bot is running');
     clearInterval(clock);
     clock = setInterval(function (){
-        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=5m`)
+        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
         .then(async (response)=>{
             let candle = response.data.candles[0];
             let prevCandle = response.data.candles[1];
@@ -49,6 +49,11 @@ function main(){
                 if(candle.partial_exit!=null && prevTrade!=null){
                     console.log("partial_exit called!")
                     await telegramService.getPartialExitMessage(config.SYMBOL, candle.close, "30%", "40%");
+                    let position = await getPosition(config.SYMBOL);
+                    if(position!=null){
+                        let exit = Math.abs(position.size)>1?Number(position.size) * 0.5:Number(position.size);
+                        await exchagneService.exitOrder(position.product_id, -Number(exit), Number(position.size) < 0 ? "buy" : "sell");
+                    }
                 }
 
                 if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null && candle.bullish===null && candle.partial_exit==null){
@@ -69,7 +74,7 @@ function main(){
                     "", 
                     Number(candle.supertrend).toFixed(2)
                     );
-                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 1, 10000, "market_order",Number(candle.supertrend).toFixed(2));
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 1, 10000, "market_order");
                     console.log("orderMarket:",orderMarket.result);
         
 
@@ -81,7 +86,8 @@ function main(){
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
 
-                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order",Number(candle.supertrend).toFixed(2));
+                    // let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order",Number(candle.supertrend).toFixed(2));
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order");
                     console.log("orderMarket:",orderMarket.result);
                 }
                 prevCandle = candle;
@@ -95,7 +101,7 @@ function main(){
 
 
 
-main();
+// main();
 
 
 function mainService(){
@@ -200,6 +206,7 @@ async function getPosition(symbol) {
     return {product_id:position.product_id, size:position.size};
 }
 
+adync
 
 async function checkService(){
     console.log('checking service');

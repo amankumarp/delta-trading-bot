@@ -40,8 +40,8 @@ class SupertrendAI {
             const isCrossUp = crossUp(close, this.supertrend);
             const isCrossDown = crossDown(close,this.supertrend);
            
-            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i]
-            const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i]
+            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i]//&& (this.sessions[i] === "London–New York Overlap" || this.sessions[i] === "New York Session")
+            const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] //&& (this.sessions[i] === "London–New York Overlap" || this.sessions[i] === "New York Session")
             const bull = Cbull && !(close[i-1] > this.ema200[i] && close[i] > this.ema200[i])
             const bear = Cbear && !(close[i-1] > this.ema200[i]  && close[i] > this.ema200[i])
             const Sbull = Cbull && (close[i-1] > this.ema200[i] && close[i] > this.ema200[i])

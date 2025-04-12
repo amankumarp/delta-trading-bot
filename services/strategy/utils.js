@@ -10,7 +10,7 @@ function formatTimestamp(timestamp) {
       timeZone: 'Asia/Kolkata', 
       hour12: false 
   });
-}
+} 
 
 function convertOHLCVtoArray(ohlcv) {
   const high = ohlcv.map((candle) => candle.high);

@@ -261,8 +261,6 @@ function calculateStochastic(highs, lows, closes, period) {
 }
 
 
-
-
 /**
  * Calculate the Supertrend Indicator.
  * @param {Array} ohlcv - Array of OHLCV data (open, high, low, close, volume).
@@ -416,26 +414,6 @@ function calculateVolatility(highs,lows,closes, atrPeriod = 10, stdDevPeriod = 2
     
         return { percentVol, volatilityStatus };
     }) 
-    // Step 3: Compute Volatility Bands
-    // const topAtrDev = smaAtr + stdAtr * 2;
-    // const bottomAtrDev = smaAtr - stdAtr * 2;
-
-
-    // Step 4: Normalize ATR within range
-    // const latestAtr = atr[atr.length - 1];
-    // const calcDev = (latestAtr - bottomAtrDev) / (topAtrDev - bottomAtrDev);
-
-    // Step 5: Calculate Volatility Percentage
-    // const percentVol = 40 * calcDev + 30;
-
-    // Step 6: Determine Volatility Status
-    // let volatilityStatus;
-    // if (percentVol < 35) volatilityStatus = "Very Low";
-    // else if (percentVol < 50) volatilityStatus = "Low";
-    // else if (percentVol < 70) volatilityStatus = "High";
-    // else volatilityStatus = "Very High";
-
-    // return { percentVol, volatilityStatus };
 }
 
 function calculateJurikVolatility(prices, lengthJurik = 14, smoothJurik = 2) {
@@ -490,26 +468,114 @@ function calculateJurikVolatility(prices, lengthJurik = 14, smoothJurik = 2) {
     return { upValues, dnValues, miValues, priceJurikArr };
 }
 
-function detectSession(timestamp) {
-    let date = new Date(timestamp*1000);
-    let utcHour = date.getUTCHours();
 
-    if (utcHour >= 0 && utcHour < 9) {
-        return "Asian Session";
-    } else if (utcHour >= 7 && utcHour < 16) {
-        return "London Session";
-    } else if (utcHour >= 12 && utcHour < 21) {
-        return "New York Session";
-    } else if (utcHour >= 22 || utcHour < 1) {
-        return "Sydney Session";
-    } else {
-        return "Outside Major Sessions";
-    }
-}
 
 function calculateSessions(timeArray) {
+    const detectSession = (timestamp) =>{
+        const date = new Date(timestamp * 1000);
+        const utcHour = date.getUTCHours();
+        const utcMinute = date.getUTCMinutes();
+        const totalMinutes = utcHour * 60 + utcMinute;
+    
+        const inRange = (min, max) => totalMinutes >= min && totalMinutes < max;
+    
+        const TOKYO_START = 0 * 60 + 0;    // 00:00 UTC
+        const TOKYO_END   = 5 * 60 + 55;   // 05:55 UTC
+    
+        const LONDON_START = 7 * 60 + 30;  // 07:30 UTC
+        const LONDON_END   = 15 * 60 + 25; // 15:25 UTC
+    
+        const NY_START = 13 * 60 + 30;     // 13:30 UTC
+        const NY_END   = 19 * 60 + 55;     // 19:55 UTC
+    
+        const inTokyo = inRange(TOKYO_START, TOKYO_END);
+        const inLondon = inRange(LONDON_START, LONDON_END);
+        const inNY = inRange(NY_START, NY_END);
+        const inOverlap = inLondon && inNY;
+    
+        if (inOverlap) return "London–New York Overlap";
+        if (inTokyo) return "Tokyo Session";
+        if (inLondon) return "London Session";
+        if (inNY) return "New York Session";
+        return "Outside Major Sessions";
+    }
+    
     return timeArray.map(detectSession);
 }
+
+
+
+function calculateARSI(close, length = 14, highlightMovements = true) {
+    const arsi = [];
+    const alphaArr = [];
+    let prevArsi = 0;
+
+    for (let i = 0; i < close.length; i++) {
+        const currentPrice = close[i];
+
+        // Calculate RSI (for alpha)
+        const rsi = calculateRSI(close.slice(0, i + 1), length);
+      
+        const alpha = 2 * Math.abs((rsi[i] / 100) - 0.5);
+        alphaArr.push(alpha);
+
+        const currentArsi = alpha * currentPrice + (1 - alpha) * (arsi[i - 1] ?? currentPrice);
+        arsi.push(currentArsi);
+    }
+
+
+    return  arsi;
+}
+
+function calculateUtBotAlerts(open, high, low, close, sensitivity = 1, atrPeriod = 10) {
+    const result = [];
+    const src = close; // Use raw close or Heikin Ashi if pre-processed
+
+    const atr = calculateATR(high, low, close, atrPeriod);
+    const ema = calculateEMA(src, 1); // EMA(1)
+
+    let trailingStop = 0;
+    let pos = 0;
+
+    for (let i = 1; i < close.length; i++) {
+        const price = src[i];
+        const prevPrice = src[i - 1];
+        const prevStop = trailingStop;
+        const loss = sensitivity * atr[i];
+
+        if (price > prevStop && prevPrice > prevStop) {
+            trailingStop = Math.max(prevStop, price - loss);
+        } else if (price < prevStop && prevPrice < prevStop) {
+            trailingStop = Math.min(prevStop, price + loss);
+        } else {
+            trailingStop = price > prevStop ? price - loss : price + loss;
+        }
+
+        if (prevPrice < prevStop && price > prevStop) {
+            pos = 1;
+        } else if (prevPrice > prevStop && price < prevStop) {
+            pos = -1;
+        }
+
+        const above = ema[i - 1] <= trailingStop && ema[i] > trailingStop;
+        const below = ema[i - 1] >= trailingStop && ema[i] < trailingStop;
+
+        const buy = price > trailingStop && above;
+        const sell = price < trailingStop && below;
+        if(buy||sell)
+        console.log(buy,sell)
+        result.push({
+            buy,
+            sell,
+            trailingStop,
+            pos,
+            barColor: price > trailingStop ? 'green' : price < trailingStop ? 'red' : 'neutral'
+        });
+    }
+
+    return result;
+}
+
 
 module.exports = {  
     calculateEMA, 
@@ -532,5 +598,7 @@ module.exports = {
     calculateCMF,
     calculateVolatility,
     calculateSessions,
-    calculateJurikVolatility
+    calculateJurikVolatility,
+    calculateUtBotAlerts,
+    calculateARSI
 };

@@ -4,6 +4,8 @@ const axios = require('axios');
 const logger = require('../logging/logger');
 const SupertrendAI = require('./SupertrendStrategy');
 const { convertOHLCVtoArray, convertOHLCVtoHeikinAshi } = require('./utils');
+const ARSIStrategy = require('./ARSIStrategy');
+const UTBotAlertStrategy = require('./UTBotStrategy');
 
 const app = express();
 const PORT = process.env.STRATEGY_SERVICE_PORT || 3002;
@@ -42,6 +44,66 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
     }
 });
 
+app.get('/strategy/rsi-ai', async (req, res) => {
+    const { symbol, interval, start, end } = req.query;
+
+    if (!symbol || !interval) {
+        logger.warn('Missing required query parameters: symbol, interval');
+        return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
+    }
+
+    try {
+
+        // Fetch OHLCV data from Market Data Service
+        const marketDataResponse = await axios.get(`${MARKET_DATA_SERVICE_URL}/ohlcv`, {
+            params: { symbol, interval, start, end},
+        });
+     
+        const ohlcv = marketDataResponse.data.reverse();
+        const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
+        // convert timestamp to time formate
+        const adaptiveRSi = new ARSIStrategy();
+        // console.log('open', open);
+        // Calculate Supertrend
+        const response = adaptiveRSi.generateSignals({ open, high, low, close, time, volume });
+        // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        res.json({signal:response.signals.reverse(),candles:response.candles.reverse()});
+    } catch (error) {
+        logger.error(`Error generating RSI signals: ${error.message}`);
+        res.status(500).json({ error: 'Failed to generate Adaptive RSI signals' });
+    }
+});
+
+
+app.get('/strategy/utbot', async (req, res) => {
+    const { symbol, interval, start, end } = req.query;
+
+    if (!symbol || !interval) {
+        logger.warn('Missing required query parameters: symbol, interval');
+        return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
+    }
+
+    try {
+
+        // Fetch OHLCV data from Market Data Service
+        const marketDataResponse = await axios.get(`${MARKET_DATA_SERVICE_URL}/ohlcv`, {
+            params: { symbol, interval, start, end},
+        });
+     
+        const ohlcv = marketDataResponse.data.reverse();
+        const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
+        // convert timestamp to time formate
+        const utbot = new UTBotAlertStrategy();
+        // console.log('open', open);
+        // Calculate Supertrend
+        const response = utbot.generateSignals({ open, high, low, close, time, volume });
+        // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        res.json({signal:response.signals.reverse(),candles:response.candles.reverse()});
+    } catch (error) {
+        logger.error(`Error generating RSI signals: ${error.message}`);
+        res.status(500).json({ error: 'Failed to generate Adaptive RSI signals' });
+    }
+});
 
 
 // Start the Strategy Service
