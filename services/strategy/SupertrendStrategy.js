@@ -22,6 +22,7 @@ class SupertrendAI {
     generateSignals(data) {
         const { open, high, low, close, time, volume} = data;
         // Calculate indicators
+        
         this.atr = calculateATR(high, low, close, this.atrLength);
         this.ema200 = calculateEMA(close, 200);
         this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA

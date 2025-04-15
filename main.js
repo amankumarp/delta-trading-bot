@@ -101,7 +101,7 @@ function main(){
 
 
 
-main();
+// main();
 
 
 function mainService(){
@@ -206,7 +206,10 @@ async function getPosition(symbol) {
     return {product_id:position.product_id, size:position.size};
 }
 
-adync
+async function getBalance(){
+    let balance = await exchagneService.getWalletBalances();
+    return balance.result[0].available_balance_for_robo;
+}
 
 async function checkService(){
     console.log('checking service');

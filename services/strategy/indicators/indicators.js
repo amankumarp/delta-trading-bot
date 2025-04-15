@@ -526,50 +526,51 @@ function calculateARSI(close, length = 14, highlightMovements = true) {
 
     return  arsi;
 }
-
-function calculateUtBotAlerts(open, high, low, close, sensitivity = 1, atrPeriod = 10) {
-    const result = [];
-    const src = close; // Use raw close or Heikin Ashi if pre-processed
-
+function calculateUtBotAlerts( high, low, close, sensitivity = 1, atrPeriod = 10) {
+    const result = [{
+        index: 0,
+        buy:false,
+        sell:false,
+        pos: 0,
+        trailingStop: 0,
+    }];
     const atr = calculateATR(high, low, close, atrPeriod);
-    const ema = calculateEMA(src, 1); // EMA(1)
-
-    let trailingStop = 0;
-    let pos = 0;
+    const trailingStop = [0];
+    const ema = calculateEMA(close, 1);
+    let pos = [0];
 
     for (let i = 1; i < close.length; i++) {
-        const price = src[i];
-        const prevPrice = src[i - 1];
-        const prevStop = trailingStop;
-        const loss = sensitivity * atr[i];
+        const src = close[i];
+        const srcPrev = close[i - 1];
+        const atrValue = atr[i];
+        const nLoss = sensitivity * Number(atrValue);
+        const prevStop = trailingStop[i - 1] ?? 0;
+     
+        let iff_1 = src > prevStop ? src - nLoss : src + nLoss;
+        let iff_2 = src < prevStop && srcPrev < prevStop ? Math.min(prevStop, src + nLoss) : iff_1;
+        let xATRTrailingStop = src > prevStop && srcPrev > prevStop ? Math.max(prevStop, src - nLoss) : iff_2;
+        
+        trailingStop.push(xATRTrailingStop);
 
-        if (price > prevStop && prevPrice > prevStop) {
-            trailingStop = Math.max(prevStop, price - loss);
-        } else if (price < prevStop && prevPrice < prevStop) {
-            trailingStop = Math.min(prevStop, price + loss);
-        } else {
-            trailingStop = price > prevStop ? price - loss : price + loss;
-        }
+        let prevPos = pos[i - 1] ?? 0;
+     
+        let iff_3 = srcPrev > prevStop && src < prevStop ? -1 : prevPos;
+        let currPos = srcPrev < prevStop && src > prevStop ? 1 : iff_3;
+        pos.push(currPos);
 
-        if (prevPrice < prevStop && price > prevStop) {
-            pos = 1;
-        } else if (prevPrice > prevStop && price < prevStop) {
-            pos = -1;
-        }
-
-        const above = ema[i - 1] <= trailingStop && ema[i] > trailingStop;
-        const below = ema[i - 1] >= trailingStop && ema[i] < trailingStop;
-
-        const buy = price > trailingStop && above;
-        const sell = price < trailingStop && below;
-        if(buy||sell)
-        console.log(buy,sell)
+        const above = ema[i - 1] <= prevStop && ema[i] > xATRTrailingStop;
+        const below = ema[i - 1] >= prevStop && ema[i] < xATRTrailingStop;
+        
+        const buy = src > xATRTrailingStop && above;
+        const sell = src < xATRTrailingStop && below;
+        // console.log('candle', open[i], high[i], low[i], close[i], buy, sell, formatTimestamp(time[i]));
+     
         result.push({
+            index: i,
             buy,
             sell,
-            trailingStop,
-            pos,
-            barColor: price > trailingStop ? 'green' : price < trailingStop ? 'red' : 'neutral'
+            pos: currPos,
+            trailingStop: xATRTrailingStop,
         });
     }
 

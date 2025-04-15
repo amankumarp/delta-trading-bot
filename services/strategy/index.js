@@ -29,7 +29,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
             params: { symbol, interval, start, end},
         });
      
-        const ohlcv = marketDataResponse.data.reverse();
+        const ohlcv = marketDataResponse.data;
         const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
         // convert timestamp to time formate
         const supertrendAI = new SupertrendAI();
@@ -37,7 +37,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         // Calculate Supertrend
         const response = supertrendAI.generateSignals({ open, high, low, close, time, volume });
         // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
-        res.json({signal:response.signals.reverse(),candles:response.candles.reverse()});
+        res.json({signal:response.signals,candles:response.candles});
     } catch (error) {
         logger.error(`Error generating Supertrend signals: ${error.message}`);
         res.status(500).json({ error: 'Failed to generate Supertrend signals' });
@@ -59,7 +59,7 @@ app.get('/strategy/rsi-ai', async (req, res) => {
             params: { symbol, interval, start, end},
         });
      
-        const ohlcv = marketDataResponse.data.reverse();
+        const ohlcv = marketDataResponse.data;
         const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
         // convert timestamp to time formate
         const adaptiveRSi = new ARSIStrategy();
@@ -90,7 +90,7 @@ app.get('/strategy/utbot', async (req, res) => {
             params: { symbol, interval, start, end},
         });
      
-        const ohlcv = marketDataResponse.data.reverse();
+        const ohlcv = marketDataResponse.data;
         const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
         // convert timestamp to time formate
         const utbot = new UTBotAlertStrategy();
@@ -98,7 +98,7 @@ app.get('/strategy/utbot', async (req, res) => {
         // Calculate Supertrend
         const response = utbot.generateSignals({ open, high, low, close, time, volume });
         // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
-        res.json({signal:response.signals.reverse(),candles:response.candles.reverse()});
+        res.json({signal:response.signals,candles:response.candles});
     } catch (error) {
         logger.error(`Error generating RSI signals: ${error.message}`);
         res.status(500).json({ error: 'Failed to generate Adaptive RSI signals' });

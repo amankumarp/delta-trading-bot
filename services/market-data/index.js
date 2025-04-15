@@ -64,8 +64,8 @@ router.get('/ohlcv', async (req, res) => {
         const endTime = parseInt(end) || defaultEnd;
 
         let candles;
-
-        if (!start && !end) {
+        console.log("starttime", start, end);
+        if (start=="undefined" && end=="undefined") {
             // Only 200 candles
             const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {
                 params: {
@@ -75,14 +75,15 @@ router.get('/ohlcv', async (req, res) => {
                     end: endTime,
                 },
             });
-            candles = response.data.result;
+            candles = response.data.result.reverse();
         } else {
             // Fetch in chunks
+        
             candles = await fetchCandleChunks(symbol, interval, startTime, endTime);
         }
 
         // logger.info(`📊 Fetched ${candles.length} candles for ${symbol} (${interval})`);
-        res.json(candles);
+        res.json(candles.sort((a, b) => a.time - b.time));
     } catch (error) {
         logger.error(`❌ Error fetching OHLCV data: ${error.message}`);
         res.status(500).json({ error: 'Failed to fetch OHLCV data' });

@@ -20,7 +20,7 @@ class BacktestService {
         this.equity = this.initialCapital;
         this.equityCurve = [{ timestamp: null, equity: this.initialCapital }];
         this.trades = [];
-        this.sessionStats = { London: 0, NewYork: 0, Asian: 0, Other: 0 };
+        this.sessionStats = { London: 0, NewYork: 0, Tokyo:0, LondonNewYork:0,Other: 0 };
         this.dayStats = {
             Monday: 0, Tuesday: 0, Wednesday: 0,
             Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0
@@ -96,15 +96,15 @@ class BacktestService {
             const commissionCost = (entryPrice + price) * positionSize * this.commission;
             pnl -= commissionCost;
 
-            const date = new Date(timestamp);
+            const date = new Date(timestamp*1000);
             const session = this.detectSession(timestamp);
-            const day = date.toLocaleString("en-US", { weekday: "long" });
+            const day = date.toLocaleString("en-GB", { weekday: "long" });
+ 
             const dayStr = date.toISOString().split("T")[0];
-
             this.sessionStats[session] += pnl;
             this.dayStats[day] += pnl;
             this.dailyReturns[dayStr] = (this.dailyReturns[dayStr] || 0) + pnl;
-
+   
             this.updateDailyPerformance();
 
             const closedTrade = {
@@ -114,8 +114,8 @@ class BacktestService {
                 positionSize,
                 isWin: pnl > 0,
                 isPartial: signal === "partial_exit",
-                entryTimestamp,
-                exitTimestamp: timestamp,
+                entryDate:new Date(entryTimestamp*1000).toLocaleString("en-GB", { timeZone: "Asia/kolkata" }),
+                exitDate: new Date(timestamp*1000).toLocaleString("en-GB", { timeZone: "Asia/kolkata" }),
                 isLong,
                 leverage: this.leverage,
                 commission: commissionCost
@@ -145,7 +145,7 @@ class BacktestService {
             this.updateDrawdown();
             this.updatePeakReturns();
 
-            const holdingTime = (new Date(timestamp) - new Date(entryTimestamp)) / (1000 * 60 * 60 * 24);
+            const holdingTime = (new Date(timestamp) - new Date(entryTimestamp)) / ( 60 * 60 * 24);
             this.holdingPeriods.push(holdingTime);
 
             if (signal === "exit") {
@@ -171,11 +171,31 @@ class BacktestService {
     }
 
     detectSession(timestamp) {
-        const date = new Date(timestamp);
+        const date = new Date(timestamp * 1000);
         const utcHour = date.getUTCHours();
-        if (utcHour >= 0 && utcHour < 9) return "Asian";
-        if (utcHour >= 8 && utcHour < 17) return "London";
-        if (utcHour >= 13 && utcHour < 22) return "NewYork";
+        const utcMinute = date.getUTCMinutes();
+        const totalMinutes = utcHour * 60 + utcMinute;
+    
+        const inRange = (min, max) => totalMinutes >= min && totalMinutes < max;
+    
+        const TOKYO_START = 0 * 60 + 0;    // 00:00 UTC
+        const TOKYO_END   = 5 * 60 + 55;   // 05:55 UTC
+    
+        const LONDON_START = 7 * 60 + 30;  // 07:30 UTC
+        const LONDON_END   = 15 * 60 + 25; // 15:25 UTC
+    
+        const NY_START = 13 * 60 + 30;     // 13:30 UTC
+        const NY_END   = 19 * 60 + 55;     // 19:55 UTC
+    
+        const inTokyo = inRange(TOKYO_START, TOKYO_END);
+        const inLondon = inRange(LONDON_START, LONDON_END);
+        const inNY = inRange(NY_START, NY_END);
+        const inOverlap = inLondon && inNY;
+    
+        if (inOverlap) return "LondonNewYork";
+        if (inTokyo) return "Tokyo";
+        if (inLondon) return "London";
+        if (inNY) return "NewYork";
         return "Other";
     }
 
@@ -206,8 +226,8 @@ class BacktestService {
             mode: this.mode,
             leverage: this.leverage,
             finalEquity: this.equity,
-            startDate: this.startDate,
-            endDate: this.endDate,
+            startDate: new Date(this.startDate*1000).toLocaleString("en-GB", { timeZone: "Asia/kolkata" }), 
+            endDate: new Date(this.endDate*1000).toLocaleString("en-GB", { timeZone: "Asia/kolkata" }),
             marketChangePct,
             equityChangePct,
             relativePerformance,
