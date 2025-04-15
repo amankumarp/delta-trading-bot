@@ -60,13 +60,6 @@ class BacktestService {
         this.losingDays = losingDays;
     }
 
-    getBestTradingSession() {
-        return Object.entries(this.sessionStats).sort((a, b) => b[1] - a[1])[0];
-    }
-
-    getBestTradingDay() {
-        return Object.entries(this.dayStats).sort((a, b) => b[1] - a[1])[0];
-    }
 
     executeTrade(signal, price, timestamp) {
         const positionSize = (this.equity * this.riskPerTrade * this.leverage) / price;
@@ -208,8 +201,9 @@ class BacktestService {
         const avgHoldingTime = this.holdingPeriods.length > 0 ? math.mean(this.holdingPeriods) : 0;
         const returns = this.trades.map(t => t.pnl);
         const sharpeRatio = returns.length > 1 ? math.mean(returns) / (math.std(returns) || 1) : 0;
-        const bestTradingSession = this.getBestTradingSession();
-        const bestTradingDay = this.getBestTradingDay();
+        
+        // console.log(this.dayStats);
+        // console.log(this.sessionStats);
 
         let marketChangePct = 0;
         let relativePerformance = 0;
@@ -233,8 +227,8 @@ class BacktestService {
             relativePerformance,
             profitableDays: this.profitableDays,
             losingDays: this.losingDays,
-            bestTradingSession,
-            bestTradingDay,
+            dayStats:this.dayStats,
+            sessionStats:this.sessionStats,
             totalDays,
             maxDrawdown: this.maxDrawdown,
             winRate: totalTrades > 0 ? (this.totalWins / totalTrades) * 100 : 0,
