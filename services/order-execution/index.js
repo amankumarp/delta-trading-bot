@@ -1,7 +1,6 @@
 const express = require('express');
 const logger = require('../logging/logger');
 const ExchangeService = require('./ExchangeService');
-// require('./websocketService'); // Import the WebSocket service
 
 const app = express();
 const PORT = process.env.TRADE_MANAGEMENT_SERVICE_PORT || 3005;

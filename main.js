@@ -5,7 +5,6 @@ const TelegramService = require("./services/notification/telegram");
 const ExchangeService = require("./services/order-execution/ExchangeService");
 const MarketDataService = require("./services/market-data/MarketDataService");
 const SupertrendAI = require("./services/strategy/SupertrendStrategy");
-const { CandleList } = require("technicalindicators");
 const telegramService = new TelegramService(config.botToken, config.chatId);
 const exchagneService = new ExchangeService(config.apiKey, config.apiSecret);
 const marketDataService = new MarketDataService();

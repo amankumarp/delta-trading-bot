@@ -1,4 +1,4 @@
-const { formatTimestamp , calculateProfitPercentage} = require('./utils');
+const { formatTimestamp , calculateProfitPercentage, convertOHLCVtoHeikinAshi} = require('./utils');
 const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI, calculateMACD, calculateSupertrend, calculateLowest, calculateHighest} = require('./indicators/index');
 const { calculateJurikVolatility, calculateSessions, calculateVolatility } = require('./indicators/indicators');
 
@@ -17,23 +17,42 @@ class SupertrendAI {
         this.highest=[];
         this.trend = [];
         this.activeSignal=null;
+        this.useHeikinAshiForSignal = true;
     }
     
     generateSignals(data) {
         const { open, high, low, close, time, volume} = data;
         // Calculate indicators
+        if(this.useHeikinAshiForSignal) {
+            const ohlcv = { open, high, low, close, time, volume };
+            const {haOpen, haHigh, haLow, haClose } = convertOHLCVtoHeikinAshi(high, low, close, open, time );
+            this.atr = calculateATR(haHigh, haLow, haClose, this.atrLength);
+            this.ema200 = calculateEMA(haClose, 200);
+            this.sma13 = calculateSMA(haClose, 13); // SMA can be approximated with EMA
+            this.rsi = calculateRSI(haClose, 14);
+            this.volatility = calculateJurikVolatility(haClose,14,2);
+            this.sessions = calculateSessions(time);
+            this.volatilityMillionMoves = calculateVolatility(haHigh, haLow, haClose);
+            
+            // Calculate Supertrend 
+            const {supertrend}= calculateSupertrend(haHigh, haLow, haClose, this.atrLength, this.multiplier);
+            this.supertrend = supertrend;
+        } else {
+            this.atr = calculateATR(high, low, close, this.atrLength);
+            this.ema200 = calculateEMA(close, 200);
+            this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA       
+            this.rsi = calculateRSI(close, 14);
+            this.volatility = calculateJurikVolatility(close,14,2);
+            this.sessions = calculateSessions(time);
+            this.volatilityMillionMoves = calculateVolatility(high, low, close);
+            // Calculate Supertrend
+            const {supertrend}= calculateSupertrend(high, low, close, this.atrLength, this.multiplier);
+            this.supertrend = supertrend;
+        }
+        // Calculate MACD
+     
+       
         
-        this.atr = calculateATR(high, low, close, this.atrLength);
-        this.ema200 = calculateEMA(close, 200);
-        this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA
-        this.rsi = calculateRSI(close, 14);
-        this.volatility = calculateJurikVolatility(close,14,2);
-        this.sessions = calculateSessions(time);
-        this.volatilityMillionMoves = calculateVolatility(high,low,close);
-        
-        // Calculate Supertrend 
-        const {supertrend}= calculateSupertrend(high, low, close, this.atrLength, this.multiplier);
-        this.supertrend = supertrend;
         // Generate buy/sell signals based on co
         const candles = [];
         const signals = [];

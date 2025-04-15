@@ -73,7 +73,7 @@ class BacktestService {
                 isLong: signal === "buy",
                 entryTimestamp: timestamp
             };
-        } else if (signal === "exit" || signal === "partial_exit") {
+        } else if (signal === "exit") {
             if (!this.openTrade) return;
 
             const { entryPrice, positionSize, isLong, entryTimestamp } = this.openTrade;

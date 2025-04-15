@@ -22,25 +22,23 @@ function convertOHLCVtoArray(ohlcv) {
   return { high, low, close, open, volume, time };
 }
 
-function convertOHLCVtoHeikinAshi(ohlcv) {
-  const ha = [];
-  for (let i = 0; i < ohlcv.length; i++) {
-    const currentCandle = ohlcv[i];
-    const haOpen = i=== 0 ? currentCandle.open : (ha[i - 1].open + ha[i - 1].close) / 2;
-    const haClose = (currentCandle.open + currentCandle.high + currentCandle.low + currentCandle.close) / 4;
-    const haCandle = {
-      time: currentCandle.time,
-      open: haOpen,
-      close: haClose,
-      high: Math.max(currentCandle.high,haOpen, haClose),
-      low: Math.min(currentCandle.low, haOpen, haClose),
-      volume: currentCandle.volume
-    };
-  
-    ha.push(haCandle);
+function convertOHLCVtoHeikinAshi( high, low, close, open, time ) {
+  const haOpen = [];
+  const haClose = [];
+  const haHigh = [];
+  const haLow = [];
+  for (let i = 0; i < time.length; i++) {
+    const _haOpen = i===0 ? open[i] : (haOpen[i - 1] + haClose[i - 1]) / 2;
+    const _haClose = (open[i] + high[i] + low[i] + close[i]) / 4;
+    const _haHigh = Math.max(high[i], _haOpen, _haClose)
+    const _haLow = Math.min(low[i], _haOpen, _haClose)
+    haOpen.push(_haOpen);
+    haClose.push(_haClose);   
+    haHigh.push(_haHigh);
+    haLow.push(_haLow);
   }
 
-  return convertOHLCVtoArray(ha);
+  return {  haOpen, haHigh,  haLow, haClose, time };
 }
 
 function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {

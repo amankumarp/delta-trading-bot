@@ -15,7 +15,7 @@ const MARKET_DATA_SERVICE_URL = process.env.MARKET_DATA_SERVICE_URL || 'http://l
 
 // Route to calculate Supertrend and generate signals
 app.get('/strategy/supertrend-ai', async (req, res) => {
-    const { symbol, interval, start, end } = req.query;
+    const { symbol, interval, start, end , candletype} = req.query;
 
     if (!symbol || !interval) {
         logger.warn('Missing required query parameters: symbol, interval');
@@ -30,7 +30,8 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         });
      
         const ohlcv = marketDataResponse.data;
-        const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
+        let candles = convertOHLCVtoArray(ohlcv);
+        const {open, high, low, close, time, volume } = candles;
         // convert timestamp to time formate
         const supertrendAI = new SupertrendAI();
         // console.log('open', open);
@@ -60,7 +61,7 @@ app.get('/strategy/rsi-ai', async (req, res) => {
         });
      
         const ohlcv = marketDataResponse.data;
-        const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
+        const {open, high, low, close, time, volume } = convertOHLCVtoArray(ohlcv);
         // convert timestamp to time formate
         const adaptiveRSi = new ARSIStrategy();
         // console.log('open', open);
@@ -91,7 +92,7 @@ app.get('/strategy/utbot', async (req, res) => {
         });
      
         const ohlcv = marketDataResponse.data;
-        const {open, high, low, close, time, volume } = convertOHLCVtoHeikinAshi(ohlcv);
+        const {open, high, low, close, time, volume } = convertOHLCVtoArray(ohlcv);
         // convert timestamp to time formate
         const utbot = new UTBotAlertStrategy();
         // console.log('open', open);
