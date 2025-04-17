@@ -87,12 +87,14 @@ class SupertrendAI {
                     signals.push({...exitSignal, profit:profitPct});
                 } 
          
-                if(this.rsi[i] >= 80 && (this.activeSignal?.bullish)){
+                if(this.rsi[i] >= 80 && (this.activeSignal?.bullish) && this.activeSignal?.partialExit != true) {
+                    this.activeSignal.partialExit=true;
                     partialExit = { time:time[i], signal: 'partial exit',  price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
                     profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
                     signals.push({...partialExit, profit:profitPct});
                
-                } else if(this.rsi[i] <= 20 &&this.activeSignal && !(this.activeSignal.bullish)){
+                } else if(this.rsi[i] <= 20 &&this.activeSignal && !(this.activeSignal.bullish) && this.activeSignal?.partialExit !== true){
+                    this.activeSignal.partialExit=true;
                     partialExit = { time:time[i], signal: 'partial exit', price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
                     profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
                     signals.push({...partialExit, profit:profitPct});
@@ -110,16 +112,16 @@ class SupertrendAI {
            
             if (Sbull) {
                 signal = { signal: 'Smart Buy', bullish:true};
-                this.activeSignal = {time:time[i], close: close[i], volatility: this.volatilityMillionMoves[i].volatilityStatus,session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i], close: close[i],partialExit:false, volatility: this.volatilityMillionMoves[i].volatilityStatus,session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (Sbear) {
                 signal = {  signal: 'Smart Sell', bullish:false};
-                this.activeSignal = {time:time[i], close: close[i],volatility: this.volatilityMillionMoves[i].volatilityStatus,session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i], close: close[i],partialExit:false, volatility: this.volatilityMillionMoves[i].volatilityStatus,session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (bull) { 
                 signal = {  signal: 'Buy', bullish:true };
-                this.activeSignal = {time:time[i], close: close[i], volatility: this.volatilityMillionMoves[i].volatilityStatus,                session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i],partialExit:false, close: close[i], volatility: this.volatilityMillionMoves[i].volatilityStatus,                session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             } else if (bear) {
                 signal = {  signal: 'Sell', bullish:false };
-                this.activeSignal = {time:time[i], close: close[i],volatility: this.volatilityMillionMoves[i].volatilityStatus, session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
+                this.activeSignal = {time:time[i],partialExit:false, close: close[i],volatility: this.volatilityMillionMoves[i].volatilityStatus, session:this.sessions[i],datetime:formatTimestamp(time[i]), ...signal};
             }
          
             const candle = { 

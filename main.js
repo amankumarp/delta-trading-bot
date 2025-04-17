@@ -19,10 +19,12 @@ function main(){
     clock = setInterval(function (){
         axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
         .then(async (response)=>{
-            let candle = response.data.candles[0];
-            let prevCandle = response.data.candles[1];
-            if(response.data.signal[0]&& response.data.signal[0].signal!="exit"){
-                prevTrade = response.data.signal[0];
+            let candles = response.data.candles.reverse();
+            let candle = candles[0];
+            let prevCandle = candles[1];
+            let signal = response.data.signal[0];
+            if(signal&& signal.signal!="exit"){
+                prevTrade = signal;
             } 
 
             let candletimestamp = candle.time;
@@ -59,7 +61,11 @@ function main(){
                     await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),`Profit: ${candle.profit}%`);
                     let slOrder = await getSLOrder();
                     if(slOrder!=null){
-                        await exchagneService.editOrder(slOrder.order_id, slOrder.product_id, Number(candle.supertrend).toFixed(2));    
+                        await exchagneService.editOrder(
+                            slOrder.order_id, 
+                            slOrder.product_id,
+                            prevTrade.bullish?Number(Number(candle.supertrend)-50).toFixed(2):Number(Number(candle.supertrend)+50).toFixed(2)
+                        );    
                     }
                     console.log("edit order called!")
                 }
@@ -71,9 +77,9 @@ function main(){
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, 
                     candle.close, 
                     "", 
-                    Number(candle.supertrend).toFixed(2)
+                    Number(Number(candle.supertrend)-50).toFixed(2)
                     );
-                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 1, 10000, "market_order");
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 1, candle.close, "market_order",Number(Number(candle.supertrend)-50).toFixed(2));
                     console.log("orderMarket:",orderMarket.result);
         
 
@@ -85,8 +91,8 @@ function main(){
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
 
-                    // let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order",Number(candle.supertrend).toFixed(2));
-                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order");
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, candle.close, "market_order",Number(Number(candle.supertrend)+50).toFixed(2));
+                    // let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order");
                     console.log("orderMarket:",orderMarket.result);
                 }
                 prevCandle = candle;
@@ -98,9 +104,7 @@ function main(){
     },  1000);
 }
 
-
-
-// main();
+main();
 
 
 function mainService(){
@@ -165,11 +169,6 @@ function mainService(){
         }
     },  1000);
 }
-
-
-
-
-
 
 // mainService();
 
@@ -244,4 +243,5 @@ async function checkService(){
     // console.log(cancle);
 
 }
+
 // checkService();

@@ -3,13 +3,17 @@ const math = require("mathjs");
 class BacktestService {
     constructor({
         initialCapital = 10000,
-        riskPerTrade = 0.01,
-        commission = 0.0005,
+        riskPerTrade = 0.001,
+        fixedPositionSize = 0.01, // default to 1 lot
+        positionSizingMode = "risk", // "risk" or "fixed"
+        commission = 0.005,
         leverage = 20,
         mode = "futures" // "spot" or "futures"
     } = {}) {
         this.initialCapital = initialCapital;
         this.riskPerTrade = riskPerTrade;
+        this.fixedPositionSize = fixedPositionSize;
+        this.positionSizingMode = positionSizingMode;
         this.commission = commission;
         this.leverage = leverage;
         this.mode = mode;
@@ -21,10 +25,7 @@ class BacktestService {
         this.equityCurve = [{ timestamp: null, equity: this.initialCapital }];
         this.trades = [];
         this.sessionStats = { London: 0, NewYork: 0, Tokyo:0, LondonNewYork:0,Other: 0 };
-        this.dayStats = {
-            Monday: 0, Tuesday: 0, Wednesday: 0,
-            Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0
-        };
+        this.dayStats = {Monday: 0, Tuesday: 0, Wednesday: 0,Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0};
         this.profitableDays = 0;
         this.losingDays = 0;
         this.dailyReturns = {};
@@ -61,33 +62,47 @@ class BacktestService {
     }
 
 
-    executeTrade(signal, price, timestamp) {
-        const positionSize = (this.equity * this.riskPerTrade * this.leverage) / price;
-
+    executeTrade(signal, price, timestamp ,sl=0) {
+        
         if (signal === "buy" || signal === "sell") {
             if (this.openTrade) return;
+            let positionSize;
+            
+            if (this.positionSizingMode === "fixed") {
+                positionSize = this.fixedPositionSize;
+            } else {
+                // risk-based sizing
+                const stopLossDistance = Math.abs(price - sl);
+                if(stopLossDistance > 500) return;
+                 console.log("stopLossDistance", stopLossDistance);
+                positionSize = (this.equity * this.riskPerTrade ) / stopLossDistance;
+
+            }
 
             this.openTrade = {
                 entryPrice: price,
                 positionSize,
+                stoploss:sl,
                 isLong: signal === "buy",
                 entryTimestamp: timestamp
             };
-        } else if (signal === "exit") {
+        } else if (signal === "exit" || signal === "partial_exit") {
             if (!this.openTrade) return;
 
-            const { entryPrice, positionSize, isLong, entryTimestamp } = this.openTrade;
+            const { entryPrice, positionSize, isLong, entryTimestamp ,stoploss} = this.openTrade;
+            const exitSize = signal === "partial_exit" ? positionSize / 2 : positionSize;
 
             let pnl = isLong
-                ? (price - entryPrice) * positionSize
-                : (entryPrice - price) * positionSize;
-
+            ? (price - entryPrice) * exitSize
+            : (entryPrice - price) * exitSize;
+           
             if (this.mode === "spot") {
                 pnl = Math.max(-this.equity, pnl);
             }
 
-            const commissionCost = (entryPrice + price) * positionSize * this.commission;
+            const commissionCost = (entryPrice + price) * exitSize * this.commission;
             pnl -= commissionCost;
+
 
             const date = new Date(timestamp*1000);
             const session = this.detectSession(timestamp);
@@ -103,8 +118,9 @@ class BacktestService {
             const closedTrade = {
                 entryPrice,
                 exitPrice: price,
+                stoploss:stoploss,
                 pnl,
-                positionSize,
+                positionSize: exitSize,
                 isWin: pnl > 0,
                 isPartial: signal === "partial_exit",
                 entryDate:new Date(entryTimestamp*1000).toLocaleString("en-GB", { timeZone: "Asia/kolkata" }),
@@ -260,8 +276,8 @@ class BacktestService {
     
             if (candle.exit_signal) this.executeTrade("exit", candle.close, candle.time);
             if (candle.partial_exit) this.executeTrade("partial_exit", candle.close, candle.time);
-            if (candle.bullish === true) this.executeTrade("buy", candle.close, candle.time);
-            if (candle.bullish === false) this.executeTrade("sell", candle.close, candle.time);
+            if (candle.bullish === true) this.executeTrade("buy", candle.close, candle.time, candle.supertrend);
+            if (candle.bullish === false) this.executeTrade("sell", candle.close, candle.time, candle.supertrend);
         }
 
         return this.getBacktestStats();

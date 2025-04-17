@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-class TradeEngine {
+class PaperTrade {
     constructor({ initialBalance = 10000, leverage = 1, mode = 'futures' }) {
         this.balance = initialBalance;
         this.leverage = leverage;
@@ -97,6 +97,54 @@ class TradeEngine {
     async getOpenPositions() {
         return await prisma.trade.findMany({ where: { status: 'open' } });
     }
+
+    // New: Add a strategy
+    async addStrategy({ userId, strategyId, initialBalance }) {
+        const user = await prisma.user.findUnique({ where: { userId } });
+        if (!user) throw new Error('User not found');
+
+        if (user.balance < initialBalance) throw new Error('Insufficient balance');
+
+        await prisma.user.update({
+            where: { userId },
+            data: { balance: user.balance - initialBalance }
+        });
+
+        const strategy = await prisma.strategy.create({
+            data: {
+                userId,
+                strategyId,
+                initialBalance
+            }
+        });
+
+        return strategy;
+    }
+
+    // New: Get all strategies for a user
+    async getStrategies(userId) {
+        return await prisma.strategy.findMany({ where: { userId } });
+    }
+
+    // New: Get trades for a specific strategy
+    async getTradesForStrategy(strategyId) {
+        return await prisma.trade.findMany({ where: { strategyId } });
+    }
+
+    // New: Close all positions for a strategy
+    async closeAllPositionsForStrategy(strategyId, exitPrice) {
+        const positions = await prisma.trade.findMany({
+            where: { strategyId, status: 'open' }
+        });
+
+        const closedPositions = [];
+        for (const pos of positions) {
+            const closed = await this.closePosition(pos.id, exitPrice);
+            closedPositions.push(closed);
+        }
+
+        return closedPositions;
+    }
 }
 
-module.exports = TradeEngine;
+module.exports = PaperTrade;

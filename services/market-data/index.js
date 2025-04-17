@@ -64,7 +64,7 @@ router.get('/ohlcv', async (req, res) => {
         const endTime = parseInt(end) || defaultEnd;
 
         let candles;
-        console.log("starttime", start, end);
+
         if (start=="undefined" && end=="undefined") {
             // Only 200 candles
             const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {

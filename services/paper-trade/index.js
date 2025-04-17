@@ -14,8 +14,10 @@ router.post('/trade/:strategyId', async (req, res) => {
     res.json(trade);
 });
 
-module.exports = router;
+
 // Start the Paper Trade Service
 app.listen(PORT, () => {
     logger.info(`Paper Trade Service running on port ${PORT}`);
 });
+
+module.exports = router;

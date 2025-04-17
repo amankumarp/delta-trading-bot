@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id       Int       @id @default(autoincrement())
+  userId   String    @unique
+  balance  Float
+  strategies Strategy[]
+}
+
 model Account {
   id        String   @id @default(auto()) @map("_id") @test.ObjectId
   name      String
@@ -15,29 +22,28 @@ model Account {
 }
 
 model Strategy {
-  id           String   @id @default(auto()) @map("_id") @test.ObjectId
-  accountId    String
-  account      Account  @relation(fields: [accountId], references: [id])
-  name         String
-  mode         String
-  leverage     Int
-  openTrades   Trade[]
-  closedTrades Trade[]
+  id              Int       @id @default(autoincrement())
+  strategyId      String
+  strategyBalance Float      // Separate balance for the strategy
+  initialBalance  Float
+  userId          String
+  user            User      @relation(fields: [userId], references: [userId])
+  trades          Trade[]
 }
 
 model Trade {
-  id            String   @id @default(auto()) @map("_id") @test.ObjectId
-  strategyId    String
-  strategy      Strategy @relation(fields: [strategyId], references: [id])
-  symbol        String
-  isLong        Boolean
-  entryPrice    Float
-  exitPrice     Float?
-  positionSize  Float
-  pnl           Float?
-  status        String   // "open", "closed", "partial"
-  entryTime     DateTime
-  exitTime      DateTime?
-  sl            Float?
-  tp            Float?
+  id          Int       @id @default(autoincrement())
+  strategyId  String
+  symbol      String
+  isLong      Boolean
+  entryPrice  Float
+  positionSize Float
+  status      String
+  entryTime   DateTime
+  stopLoss    Float?
+  takeProfit  Float?
+  exitPrice   Float?
+  pnl         Float?
+  exitTime    DateTime?
+  strategy    Strategy  @relation(fields: [strategyId], references: [strategyId])
 }
