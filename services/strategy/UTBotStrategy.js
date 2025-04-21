@@ -14,7 +14,7 @@ class UTBotAlertStrategy {
         const { open, high, low, close, time, volume} = data;
         // Calculate indicators
         let i= close.length-2;
-        this.utbot = calculateUtBotAlerts( high, low, close,1 ,10);
+        this.utbot = calculateUtBotAlerts( high, low, close, 2 ,1);
         this.sessions = calculateSessions(time);
         // Generate buy/sell signals based on co
         const candles = [];

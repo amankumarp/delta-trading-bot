@@ -17,12 +17,13 @@ function main(){
     console.log('Bot is running');
     clearInterval(clock);
     clock = setInterval(function (){
-        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=1m`)
+        axios.get(`http://localhost:3002/strategy/${config.STRATEGY}?symbol=${config.SYMBOL}&interval=15m`)
         .then(async (response)=>{
             let candles = response.data.candles.reverse();
             let candle = candles[0];
             let prevCandle = candles[1];
-            let signal = response.data.signal[0];
+            let signals = response.data.signal.reverse();
+            let signal = signals[0];
             if(signal&& signal.signal!="exit"){
                 prevTrade = signal;
             } 
@@ -104,7 +105,7 @@ function main(){
     },  1000);
 }
 
-main();
+// main();
 
 
 function mainService(){
