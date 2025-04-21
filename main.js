@@ -105,7 +105,7 @@ function main(){
     },  1000);
 }
 
-// main();
+main();
 
 
 function mainService(){
