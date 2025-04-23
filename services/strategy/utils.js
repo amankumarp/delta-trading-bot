@@ -41,6 +41,150 @@ function convertOHLCVtoHeikinAshi( high, low, close, open, time ) {
   return {  haOpen, haHigh,  haLow, haClose, time };
 }
 
+
+
+function linreg(source, length, offset = 0) {
+  const result = [];
+  for (let i = 0; i < source.length; i++) {
+      if (i < length - 1) {
+          result.push(null);
+          continue;
+      }
+      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+      for (let j = 0; j < length; j++) {
+          let x = j;
+          let y = source[i - j];
+          sumX += x;
+          sumY += y;
+          sumXY += x * y;
+          sumX2 += x * x;
+      }
+      const slope = (length * sumXY - sumX * sumY) / (length * sumX2 - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / length;
+      const regValue = intercept + slope * (length - 1 - offset);
+      result.push(regValue);
+  }
+  return result;
+}
+
+
+
+function calcLinRegCandle(data, config = {}) {
+  const {
+      signalLength = 11,
+      smaSignal = true,
+      useLinReg = true,
+      linregLength = 11
+  } = config;
+
+  const { open, high, low, close } = data;
+
+  const bopen = useLinReg ? linreg(open, linregLength) : open;
+  const bhigh = useLinReg ? linreg(high, linregLength) : high;
+  const blow = useLinReg ? linreg(low, linregLength) : low;
+  const bclose = useLinReg ? linreg(close, linregLength) : close;
+
+  const signal = smaSignal ? sma(bclose, signalLength) : ema(bclose, signalLength);
+
+  const candles = [];
+  for (let i = 0; i < bclose.length; i++) {
+      if (bopen[i] == null || bhigh[i] == null || blow[i] == null || bclose[i] == null) {
+          candles.push(null);
+          continue;
+      }
+
+      const isBullish = bopen[i] < bclose[i];
+      candles.push({
+          open: bopen[i],
+          high: bhigh[i],
+          low: blow[i],
+          close: bclose[i],
+          color: isBullish ? 'green' : 'red',
+          signal: signal[i]
+      });
+  }
+
+  return candles;
+}
+
+
+function sma(values, length) {
+  const result = [];
+  for (let i = 0; i < values.length; i++) {
+      if (i < length - 1) {
+          result.push(null);
+      } else {
+          const slice = values.slice(i - length + 1, i + 1);
+          result.push(math.mean(slice));
+      }
+  }
+  return result;
+}
+
+function ema(values, length) {
+  const result = [];
+  const alpha = 2 / (length + 1);
+  let prev = values[0];
+  result.push(prev);
+  for (let i = 1; i < values.length; i++) {
+      const curr = alpha * values[i] + (1 - alpha) * prev;
+      result.push(curr);
+      prev = curr;
+  }
+  return result;
+}
+
+
+function calcSmoothedHeikinAshi(data, len = 10, len2 = 10) {
+  const o = ema(data.open, len);
+  const h = ema(data.high, len);
+  const l = ema(data.low, len);
+  const c = ema(data.close, len);
+
+  const haclose = [];
+  const haopen = [];
+  const hahigh = [];
+  const halow = [];
+
+  for (let i = 0; i < data.close.length; i++) {
+      const currentHAClose = (o[i] + h[i] + l[i] + c[i]) / 4;
+      haclose.push(currentHAClose);
+
+      if (i === 0) {
+          haopen.push((o[i] + c[i]) / 2);
+      } else {
+          haopen.push((haopen[i - 1] + haclose[i - 1]) / 2);
+      }
+
+      hahigh.push(Math.max(h[i], haopen[i], haclose[i]));
+      halow.push(Math.min(l[i], haopen[i], haclose[i]));
+  }
+
+  const o2 = ema(haopen, len2);
+  const c2 = ema(haclose, len2);
+  const h2 = ema(hahigh, len2);
+  const l2 = ema(halow, len2);
+
+  const candles = [];
+  for (let i = 0; i < data.close.length; i++) {
+      if ([o2[i], c2[i], h2[i], l2[i]].some(val => val == null)) {
+          candles.push(null);
+          continue;
+      }
+
+      candles.push({
+          open: o2[i],
+          high: h2[i],
+          low: l2[i],
+          close: c2[i],
+          color: o2[i] > c2[i] ? 'red' : 'lime'
+      });
+  }
+
+  return candles;
+}
+
+
 function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
               
   let profitPct;
@@ -55,4 +199,4 @@ function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
   return profitPct;
 }
 
-module.exports = { convertOHLCVtoArray,formatTimestamp, convertOHLCVtoHeikinAshi, calculateProfitPercentage};
+module.exports = { convertOHLCVtoArray,formatTimestamp, convertOHLCVtoHeikinAshi, calculateProfitPercentage,  calcLinRegCandle , calcSmoothedHeikinAshi};

@@ -1,7 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-
-const logger = require('../logging/logger');
 const SupertrendAI = require('./SupertrendStrategy');
 const { convertOHLCVtoArray, convertOHLCVtoHeikinAshi } = require('./utils');
 const ARSIStrategy = require('./ARSIStrategy');
@@ -18,7 +16,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
     const { symbol, interval, start, end , candletype} = req.query;
 
     if (!symbol || !interval) {
-        logger.warn('Missing required query parameters: symbol, interval');
+        console.warn('Missing required query parameters: symbol, interval');
         return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
     }
 
@@ -37,10 +35,10 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         // console.log('open', open);
         // Calculate Supertrend
         const response = supertrendAI.generateSignals({ open, high, low, close, time, volume });
-        // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        // console.log(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
         res.json({signal:response.signals,candles:response.candles});
     } catch (error) {
-        logger.error(`Error generating Supertrend signals: ${error.message}`);
+        console.log(`Error generating Supertrend signals: ${error.message}`);
         res.status(500).json({ error: 'Failed to generate Supertrend signals' });
     }
 });
@@ -49,7 +47,7 @@ app.get('/strategy/rsi-ai', async (req, res) => {
     const { symbol, interval, start, end } = req.query;
 
     if (!symbol || !interval) {
-        logger.warn('Missing required query parameters: symbol, interval');
+        console.warn('Missing required query parameters: symbol, interval');
         return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
     }
 
@@ -67,10 +65,10 @@ app.get('/strategy/rsi-ai', async (req, res) => {
         // console.log('open', open);
         // Calculate Supertrend
         const response = adaptiveRSi.generateSignals({ open, high, low, close, time, volume });
-        // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        // console.log(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
         res.json({signal:response.signals.reverse(),candles:response.candles.reverse()});
     } catch (error) {
-        logger.error(`Error generating RSI signals: ${error.message}`);
+        console.log(`Error generating RSI signals: ${error.message}`);
         res.status(500).json({ error: 'Failed to generate Adaptive RSI signals' });
     }
 });
@@ -80,7 +78,7 @@ app.get('/strategy/utbot', async (req, res) => {
     const { symbol, interval, start, end } = req.query;
 
     if (!symbol || !interval) {
-        logger.warn('Missing required query parameters: symbol, interval');
+        console.warn('Missing required query parameters: symbol, interval');
         return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
     }
 
@@ -98,10 +96,10 @@ app.get('/strategy/utbot', async (req, res) => {
         // console.log('open', open);
         // Calculate Supertrend
         const response = utbot.generateSignals({ open, high, low, close, time, volume });
-        // logger.info(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        // console.log(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
         res.json({signal:response.signals,candles:response.candles});
     } catch (error) {
-        logger.error(`Error generating RSI signals: ${error.message}`);
+        console.log(`Error generating RSI signals: ${error.message}`);
         res.status(500).json({ error: 'Failed to generate Adaptive RSI signals' });
     }
 });
@@ -109,5 +107,5 @@ app.get('/strategy/utbot', async (req, res) => {
 
 // Start the Strategy Service
 app.listen(PORT, () => {
-    logger.info(`Strategy Service running on port ${PORT}`);
+    console.log(`Strategy Service running on port ${PORT}`);
 });

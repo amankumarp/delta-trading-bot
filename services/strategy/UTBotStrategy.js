@@ -1,4 +1,4 @@
-const { formatTimestamp , calculateProfitPercentage} = require('./utils');
+const { formatTimestamp , calculateProfitPercentage, convertOHLCVtoHeikinAshi} = require('./utils');
 const { calculateSessions, calculateARSI, calculateUtBotAlerts } = require('./indicators/indicators');
 
 class UTBotAlertStrategy {
@@ -13,8 +13,9 @@ class UTBotAlertStrategy {
     generateSignals(data) {
         const { open, high, low, close, time, volume} = data;
         // Calculate indicators
-        let i= close.length-2;
-        this.utbot = calculateUtBotAlerts( high, low, close, 2 ,1);
+        
+        const {haOpen, haHigh, haLow, haClose } = convertOHLCVtoHeikinAshi(high, low, close, open, time );
+        this.utbot = calculateUtBotAlerts( haHigh, haLow, haClose, 2 ,1);
         this.sessions = calculateSessions(time);
         // Generate buy/sell signals based on co
         const candles = [];

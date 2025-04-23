@@ -1,7 +1,5 @@
 const express = require('express');
 const PaperTradeService= require('./paperTrade');
-const logger = require('../logging/logger');
-
 const app = express();
 const PORT = process.env.PAPER_TRADE_SERVICE_PORT || 3007;
 
@@ -17,7 +15,7 @@ router.post('/trade/:strategyId', async (req, res) => {
 
 // Start the Paper Trade Service
 app.listen(PORT, () => {
-    logger.info(`Paper Trade Service running on port ${PORT}`);
+    console.log(`Paper Trade Service running on port ${PORT}`);
 });
 
 module.exports = router;

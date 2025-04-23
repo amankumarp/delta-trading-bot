@@ -8,42 +8,49 @@ datasource db {
 }
 
 model User {
-  id       Int       @id @default(autoincrement())
-  userId   String    @unique
-  balance  Float
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String     @unique
+  balance   Float      // Demo amount or total balance
   strategies Strategy[]
-}
-
-model Account {
-  id        String   @id @default(auto()) @map("_id") @test.ObjectId
-  name      String
-  balance   Float
-  strategies Strategy[]
+  trades    Trade[]
 }
 
 model Strategy {
-  id              Int       @id @default(autoincrement())
-  strategyId      String
-  strategyBalance Float      // Separate balance for the strategy
-  initialBalance  Float
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  allocatedAmount Float      // Separate amount allocated for this strategy
   userId          String
-  user            User      @relation(fields: [userId], references: [userId])
+  user            User       @relation(fields: [userId], references: [id])
   trades          Trade[]
+  signals         Signal[]
 }
 
 model Trade {
-  id          Int       @id @default(autoincrement())
-  strategyId  String
-  symbol      String
-  isLong      Boolean
-  entryPrice  Float
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  strategyId   String
+  userId       String
+  symbol       String
+  isLong       Boolean
+  entryPrice   Float
   positionSize Float
-  status      String
-  entryTime   DateTime
-  stopLoss    Float?
-  takeProfit  Float?
-  exitPrice   Float?
-  pnl         Float?
-  exitTime    DateTime?
-  strategy    Strategy  @relation(fields: [strategyId], references: [strategyId])
+  status       String    // e.g., open, closed, partial
+  entryTime    DateTime
+  stopLoss     Float?
+  takeProfit   Float?
+  exitPrice    Float?
+  pnl          Float?
+  exitTime     DateTime?
+  strategy     Strategy  @relation(fields: [strategyId], references: [id])
+  user         User      @relation(fields: [userId], references: [id])
+}
+
+model Signal {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  strategyId  String
+  type        String    // e.g., buy, sell, partial_exit, exit
+  symbol      String
+  price       Float
+  quantity    Float
+  time        DateTime
+  strategy    Strategy  @relation(fields: [strategyId], references: [id])
 }

@@ -1,6 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const logger = require('../logging/logger');
 const { parseIntervalToSeconds } = require('./utils');
 const config = require('../../config/index');
 
@@ -34,7 +33,7 @@ async function fetchCandleChunks(symbol, interval, start, end) {
 
             if (candles.length === 0) break; // No more data
         } catch (err) {
-            logger.error(`Chunk fetch failed: ${err.message}`);
+            console.log(`Chunk fetch failed: ${err.message}`);
             break;
         }
 
@@ -49,7 +48,7 @@ router.get('/ohlcv', async (req, res) => {
     const { symbol, interval, start, end } = req.query;
 
     if (!symbol || !interval) {
-        logger.warn('Missing required query parameters: symbol, interval');
+        console.warn('Missing required query parameters: symbol, interval');
         return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
     }
 
@@ -85,7 +84,7 @@ router.get('/ohlcv', async (req, res) => {
         // logger.info(`📊 Fetched ${candles.length} candles for ${symbol} (${interval})`);
         res.json(candles.sort((a, b) => a.time - b.time));
     } catch (error) {
-        logger.error(`❌ Error fetching OHLCV data: ${error.message}`);
+        console.log(`❌ Error fetching OHLCV data: ${error.message}`);
         res.status(500).json({ error: 'Failed to fetch OHLCV data' });
     }
 });
@@ -94,7 +93,7 @@ app.use('/api', router);
 
 // Start the server
 app.listen(PORT, () => {
-    logger.info(`🚀 Market Data Service running on port ${PORT}`);
+    console.log(`🚀 Market Data Service running on port ${PORT}`);
 });
 
 module.exports = router;

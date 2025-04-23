@@ -1,6 +1,5 @@
 const express = require('express');
 const BacktestService = require('./backtest');
-const logger = require('../logging/logger');
 const axios = require("axios");
 const app = express();
 const PORT = process.env.BACKTEST_SERVICE_PORT || 3006;
@@ -17,7 +16,6 @@ app.get('/backtest/supertrend-ai', async (req, res) => {
         const results = backtestService.runBacktest(strategySignals.data.candles);
         res.json(results);
     } catch (error) {
-        logger.error(`Error running backtest: ${error.message}`);
         res.status(500).json({ error: 'Failed to run backtest' });
     }
 });
@@ -31,12 +29,11 @@ app.get('/backtest/utbot', async (req, res) => {
         const results = backtestService.runBacktest(candles)
         res.json(results);
     } catch (error) {
-        logger.error(`Error running backtest: ${error.message}`);
         res.status(500).json({ error: 'Failed to run backtest' });
     }
 });
 
 // Start the Backtest Service
 app.listen(PORT, () => {
-    logger.info(`Backtest Service running on port ${PORT}`);
+    console.log(`Backtest Service running on port ${PORT}`);
 });

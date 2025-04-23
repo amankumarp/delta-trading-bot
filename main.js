@@ -13,6 +13,7 @@ const strategyService = new SupertrendAI();
 let lastCandleTimestamp = 0;
 var clock; 
 var prevTrade;
+
 function main(){
     console.log('Bot is running');
     clearInterval(clock);
@@ -71,7 +72,7 @@ function main(){
                     console.log("edit order called!")
                 }
 
-                if(candle.bullish==true){
+                if(["Buy","Smart Buy"].includes(candle.new_signal)){
                     console.log("buy order called!")
                     // Place Buy Order
                     prevTrade = candle;
@@ -85,7 +86,8 @@ function main(){
         
 
                 }
-                if(candle.bullish==false){
+
+                if(["Sell","Smart Sell"].includes(candle.new_signal)){
                     // Place Sell Order
                     console.log("sell order called!")
                     prevTrade = candle;
@@ -96,6 +98,7 @@ function main(){
                     // let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order");
                     console.log("orderMarket:",orderMarket.result);
                 }
+
                 prevCandle = candle;
             }
         })

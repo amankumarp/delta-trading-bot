@@ -1,42 +1,48 @@
 {
-    "name": "delta-futures-trading-bot",
-    "version": "1.0.0",
-    "private": true,
-    "description": "A microservices-based trading bot for Delta Futures using Node.js.",
-    "workspaces": [
-        "services/*",
-        "controllers/*",
-        "routes/*"
-    ],
-    "scripts": {
-        "start": "concurrently \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"  \"npm run start:backtest\" \"node main.js\"",
-        "start:market-data": "nodemon services/market-data/index.js",
-        "start:strategy": "nodemon services/strategy/index.js",
-        "start:backtest": "nodemon services/backtest/index.js",
-        "start:order-execution": "nodemon services/order-execution/index.js",
-        "test": "echo \"No tests defined yet.\" && exit 0"
-    },
-    "author": "Your Name",
-    "license": "MPL-2.0",
-    "dependencies": {
-        "axios": "^1.8.4",
-        "ccxt": "^4.4.73",
-        "commander": "^13.1.0",
-        "concurrently": "^7.6.0",
-        "crypto": "^1.0.1",
-        "dotenv": "^16.4.7",
-        "express": "^4.21.2",
-        "lodash": "^4.17.21",
-        "mathjs": "^10.6.4",
-        "redis": "^4.7.0",
-        "technicalindicators": "^3.1.0",
-        "winston": "^3.8.2",
-        "winston-daily-rotate-file": "^5.0.0",
-        "ws": "^8.18.1"
-    },
-    "devDependencies": {
-        "jest": "^29.7.0",
-        "nodemon": "^2.0.22",
-        "supertest": "^7.1.0"
-    }
+  "name": "delta-futures-trading-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A microservices-based trading bot for Delta Futures using Node.js.",
+  "workspaces": [
+    "services/*",
+    "controllers/*",
+    "routes/*"
+  ],
+  "prisma": {
+    "schema": "services/paper-trade/prisma/schema.prisma"
+  },
+  "scripts": {
+    "start": "concurrently --names \"market-data,strategy,order-execution,backtest,paper-trade,main\" --prefix-colors \"cyan,green,magenta,yellow,blue,red\" \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"  \"npm run start:backtest\"  \"node main.js\"",
+    "start:market-data": "nodemon services/market-data/index.js",
+    "start:strategy": "nodemon services/strategy/index.js",
+    "start:backtest": "nodemon services/backtest/index.js",
+    "start:order-execution": "nodemon services/order-execution/index.js",
+    "start:paper-trade": "nodemon services/paper-trade/index.js",
+    "test": "echo \"No tests defined yet.\" && exit 0"
+  },
+  "author": "Your Name",
+  "license": "MPL-2.0",
+  "dependencies": {
+    "@prisma/client": "^6.6.0",
+    "axios": "^1.8.4",
+    "ccxt": "^4.4.73",
+    "commander": "^13.1.0",
+    "concurrently": "^7.6.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "lodash": "^4.17.21",
+    "mathjs": "^10.6.4",
+    "prisma": "^6.6.0",
+    "redis": "^4.7.0",
+    "technicalindicators": "^3.1.0",
+    "winston": "^3.8.2",
+    "winston-daily-rotate-file": "^5.0.0",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^2.0.22",
+    "supertest": "^7.1.0"
+  }
 }
