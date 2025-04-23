@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile  # Specify the Dockerfile name if not default
     ports:
       - "3002:3002"           # Map host port 80 to container port 80 (adjust as needed)
+      - "3006:3006"  
     volumes:
       - ./:/usr/src/app   # Example volume mount: mount current directory to /usr/src/app in the container
       - ./logs:/usr/src/app/logs
