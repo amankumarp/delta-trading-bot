@@ -26,7 +26,11 @@ function main(){
             let signals = response.data.signal.reverse();
             let signal = signals[0];
             if(signal&& signal.signal!="exit"){
-                prevTrade = signal;
+                if(signal.signal=="partial_exit") {
+                    prevTrade = signal.active;
+                } else{
+                    prevTrade = signal;
+                }
             } 
 
             let candletimestamp = candle.time;
