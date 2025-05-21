@@ -86,9 +86,12 @@ function main(){
                     "", 
                     Number(Number(candle.supertrend)-50).toFixed(2)
                     );
-                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 2, candle.close, "market_order",Number(Number(candle.supertrend)-50).toFixed(2));
-                    console.log("orderMarket:",orderMarket.result);
-        
+                    let risk = Math.abs(candle.close - candle.supertrend);
+                    const risk_percentage = Number(Math.abs((risk / candle.close) * 100)).toFixed(2);
+                    if(risk_percentage < 0.8){
+                        let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 2, candle.close, "market_order",Number(Number(candle.supertrend)-50).toFixed(2));
+                        console.log("orderMarket:",orderMarket.result);
+                    }
 
                 }
 
@@ -98,10 +101,12 @@ function main(){
                     prevTrade = candle;
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
                     // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
-
-                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",2, candle.close, "market_order",Number(Number(candle.supertrend)+50).toFixed(2));
-                    // let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",1, 10000, "market_order");
-                    console.log("orderMarket:",orderMarket.result);
+                    let risk = Math.abs(candle.close - candle.supertrend);
+                    const risk_percentage = Number(Math.abs((risk / candle.close) * 100)).toFixed(2);
+                    if(risk_percentage < 0.8){
+                        let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",2, candle.close, "market_order",Number(Number(candle.supertrend)+50).toFixed(2));
+                        console.log("orderMarket:",orderMarket.result);
+                    }
                 }
 
                 prevCandle = candle;
