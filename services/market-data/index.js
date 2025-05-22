@@ -2,8 +2,9 @@ const express = require('express');
 const axios = require('axios');
 const { parseIntervalToSeconds } = require('./utils');
 const config = require('../../config/index');
-
+const cors = require('cors');
 const app = express();
+app.use(cors());
 const PORT = process.env.MARKET_DATA_PORT || 3001;
 const router = express.Router();
 const DELTA_API_BASE_URL = 'https://api.india.delta.exchange/v2';
