@@ -7,9 +7,7 @@ const UTBotAlertStrategy = require('./UTBotStrategy');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.STRATEGY_SERVICE_PORT || 3002;
-app.use(cors({
-    origin: '*', // Allow all origins
-}))
+app.use(cors());
 
 // Market Data Service Base URL
 const MARKET_DATA_SERVICE_URL = process.env.MARKET_DATA_SERVICE_URL || 'http://localhost:3001/api';
