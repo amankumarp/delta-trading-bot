@@ -199,4 +199,74 @@ function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
   return profitPct;
 }
 
-module.exports = { convertOHLCVtoArray,formatTimestamp, convertOHLCVtoHeikinAshi, calculateProfitPercentage,  calcLinRegCandle , calcSmoothedHeikinAshi};
+
+function calculateRiskPercentage(trade, offset = 0) {
+    const entry_price = trade.entry_price;
+    const stop_loss = trade.supertrend + offset;
+    let risk;
+
+    if (trade.isLong) {
+        risk = entry_price - stop_loss; // Loss if price falls to stop-loss
+    } else {
+        risk = stop_loss - entry_price; // Loss if price rises to stop-loss
+    }
+
+    const risk_percentage = (risk / entry_price) * 100;
+    return Math.abs(risk_percentage).toFixed(2); // Return positive percentage
+}
+
+function generateTradeReport(data) {
+    const report = [];
+    let currentEntry = null;
+
+    for (const record of data) {
+  
+        if (currentEntry && (record.exit_signal === "exit")) {
+            const profit = currentEntry.isLong
+                ? ((record.close - currentEntry.entry_price) / currentEntry.entry_price * 100).toFixed(2)
+                : ((currentEntry.entry_price - record.close) / currentEntry.entry_price * 100).toFixed(2);
+
+            report.push({
+               ...currentEntry,
+                exit_time: record.datetime,
+                exit_price: record.close,
+                risk_percentage: calculateRiskPercentage(currentEntry, 0),
+                profit: profit
+            });
+
+            currentEntry = null;
+          
+        }
+
+        if (record.new_signal && ["Smart Buy", "Buy", "Smart Sell"].includes(record.new_signal)) {
+            currentEntry = {
+                entry_time: record.datetime,
+                entry_price: record.close,
+                supertrend: record.supertrend,
+                rsi: record.rsi,
+                session: record.session,
+                open: record.open,
+                high: record.high,
+                low: record.low,
+                close: record.close,
+                volume: record.volume,
+                atr: record.atr,
+                ema200: record.ema200,
+                sma13: record.sma13,
+                rsi: record.rsi,
+                upperBandVol:record.upperBandVol,
+                lowerBandVol: record.lowerBandVol,
+                priceJurik: record.priceJurik,
+                volatility: record.volatility,
+                isLong: record.new_signal.includes("Buy"),
+                
+            };
+        }
+
+    }
+
+    return report;
+}
+
+
+module.exports = { convertOHLCVtoArray,formatTimestamp, convertOHLCVtoHeikinAshi, calculateProfitPercentage,  calcLinRegCandle , calcSmoothedHeikinAshi,generateTradeReport };

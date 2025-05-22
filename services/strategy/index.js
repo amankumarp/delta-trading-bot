@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const SupertrendAI = require('./SupertrendStrategy');
-const { convertOHLCVtoArray, convertOHLCVtoHeikinAshi } = require('./utils');
+const { convertOHLCVtoArray, convertOHLCVtoHeikinAshi, generateTradeReport } = require('./utils');
 const ARSIStrategy = require('./ARSIStrategy');
 const UTBotAlertStrategy = require('./UTBotStrategy');
 
@@ -13,7 +13,7 @@ const MARKET_DATA_SERVICE_URL = process.env.MARKET_DATA_SERVICE_URL || 'http://l
 
 // Route to calculate Supertrend and generate signals
 app.get('/strategy/supertrend-ai', async (req, res) => {
-    const { symbol, interval, start, end , candletype} = req.query;
+    const { symbol, interval, start, end , candletype, onlytrade} = req.query;
 
     if (!symbol || !interval) {
         console.warn('Missing required query parameters: symbol, interval');
@@ -36,6 +36,10 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         // Calculate Supertrend
         const response = supertrendAI.generateSignals({ open, high, low, close, time, volume });
         // console.log(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
+        if(onlytrade) {
+            let trades = generateTradeReport(response.candles);
+            res.json({trades:trades});
+        }
         res.json({signal:response.signals,candles:response.candles});
     } catch (error) {
         console.log(`Error generating Supertrend signals: ${error.message}`);
