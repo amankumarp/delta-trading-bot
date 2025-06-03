@@ -7,7 +7,7 @@ const axios = require("axios");
 dotenv.config();
 
 const app = express();
-const port = 8080;
+const port = 4040;
 
 app.use(express.json());
 
