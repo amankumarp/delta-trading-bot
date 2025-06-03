@@ -504,7 +504,6 @@ function calculateSessions(timeArray) {
 }
 
 
-
 function calculateARSI(close, length = 14, highlightMovements = true) {
     const arsi = [];
     const alphaArr = [];
@@ -577,6 +576,98 @@ function calculateUtBotAlerts( high, low, close, sensitivity = 1, atrPeriod = 10
     return result;
 }
 
+function calculateHFTCandles({ open, high, low, close, volume, timestamp },  intervalMinutes, targetMinutes, offsetMinutes = 0) {
+  const intervalSec = intervalMinutes * 60;
+  const targetSec = targetMinutes * 60;
+  const groupSize = targetSec / intervalSec;
+  const offsetSec = offsetMinutes * 60;
+
+  // Align timestamp based on target interval and offset
+  function alignTimestamp(ts) {
+    return Math.floor((ts - offsetSec) / targetSec) * targetSec + offsetSec;
+  }
+
+  const grouped = {};
+
+  // Group candles based on aligned timestamp
+   for (let i = 0; i < timestamp.length; i++) {
+        const alignedTs = alignTimestamp(timestamp[i]);
+        if (!grouped[alignedTs]) grouped[alignedTs] = [];
+
+        grouped[alignedTs].push({
+            open: open[i],
+            high: high[i],
+            low: low[i],
+            close: close[i],
+            volume: volume[i],
+            timestamp: timestamp[i],
+        });
+  }
+
+  // Aggregate each group
+ const result = {
+    timestamp: [],
+    open: [],
+    high: [],
+    low: [],
+    close: [],
+    volume: [],
+  };
+
+   // Aggregate
+  for (const groupKey in grouped) {
+    const group = grouped[groupKey];
+    if (group.length < groupSize) continue;
+
+    result.timestamp.push(Number(groupKey));
+    result.open.push(group[0].open);
+    result.high.push(Math.max(...group.map(c => c.high)));
+    result.low.push(Math.min(...group.map(c => c.low)));
+    result.close.push(group[group.length - 1].close);
+    result.volume.push(group.reduce((sum, c) => sum + c.volume, 0));
+  }
+   
+
+  return result;
+}
+
+
+// Function to check if the market is sideways
+function isCandleRanging(candles, rangeThresholdPercent = 0.7, closeRangePercent = 0.5) {
+    
+    const highest = Math.max(...candles.high);
+    const lowest = Math.min(...candles.low);
+
+  // Step 1: Calculate the range for each candle (high - low)
+  const ranges = candles.high.map((high, i) => high - candles.low[i]);
+  
+  // Step 2: Calculate average price to normalize ranges
+  const avgPrice = candles.close.reduce((sum, price) => sum + price, 0) / candles.close.length;
+  
+  // Step 3: Convert ranges to percentage of average price
+  const rangePercentages = ranges.map(range => (range / avgPrice) * 100);
+  
+  // Step 4: Check if all ranges are below the threshold
+  const isRangeSmall = rangePercentages.every(range => range <= rangeThresholdPercent);
+  
+  // Step 5: Calculate the range of closing prices
+  const maxClose = Math.max(...candles.close);
+  const minClose = Math.min(...candles.close);
+  const closeRange = ((maxClose - minClose) / avgPrice) * 100;
+  
+  // Step 6: Check if closing price range is below the threshold
+  const isCloseStable = closeRange <= closeRangePercent;
+  
+  // Step 7: Return result
+  return {
+    isSideways: isRangeSmall && isCloseStable,
+    ranges: rangePercentages,
+    closeRangePercent: closeRange,
+    highest,
+    lowest
+  };
+}
+
 
 module.exports = {  
     calculateEMA, 
@@ -601,5 +692,7 @@ module.exports = {
     calculateSessions,
     calculateJurikVolatility,
     calculateUtBotAlerts,
-    calculateARSI
+    calculateARSI,
+    calculateHFTCandles,
+    isCandleRanging
 };

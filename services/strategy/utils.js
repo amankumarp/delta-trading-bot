@@ -211,7 +211,7 @@ function calculateRiskPercentage(trade, offset = 0) {
         risk = stop_loss - entry_price; // Loss if price rises to stop-loss
     }
 
-    const risk_percentage = (risk / entry_price) * 100;
+    const risk_percentage = (risk / stop_loss) * 100;
     return Math.abs(risk_percentage).toFixed(2); // Return positive percentage
 }
 
@@ -221,15 +221,23 @@ function generateTradeReport(data) {
 
     for (const record of data) {
   
+        if(currentEntry && (record.partial_exit === "partial_exit"))   {
+            currentEntry.partial_exit_price = record.close;
+            currentEntry.partial_exit_time = record.datetime;
+        }
+
         if (currentEntry && (record.exit_signal === "exit")) {
+            let isProfitable = (currentEntry.isLong && record.close > currentEntry.entry_price) || (currentEntry.isLong==false && record.close <  currentEntry.entry_price)?true:false;
+            let exit_price = isProfitable?record.close:currentEntry.supertrend; 
             const profit = currentEntry.isLong
-                ? ((record.close - currentEntry.entry_price) / currentEntry.entry_price * 100).toFixed(2)
-                : ((currentEntry.entry_price - record.close) / currentEntry.entry_price * 100).toFixed(2);
+                ? ((exit_price - currentEntry.entry_price) / currentEntry.entry_price * 100).toFixed(2)
+                : ((currentEntry.entry_price - exit_price) / currentEntry.entry_price * 100).toFixed(2);
+                 
 
             report.push({
                ...currentEntry,
                 exit_time: record.datetime,
-                exit_price: record.close,
+                exit_price: exit_price,
                 risk_percentage: calculateRiskPercentage(currentEntry, 0),
                 profit: profit
             });
@@ -254,6 +262,9 @@ function generateTradeReport(data) {
                 ema200: record.ema200,
                 sma13: record.sma13,
                 rsi: record.rsi,
+                isHCandleRanging: record.isCandleRanging,
+                h1_highest: record.highest,
+                h1_lowest: record.lowest,
                 upperBandVol:record.upperBandVol,
                 lowerBandVol: record.lowerBandVol,
                 priceJurik: record.priceJurik,

@@ -17,6 +17,7 @@ const {
     calculateBarsSince,
     calculateHighest,
     calculateLowest,
+    isCandleRanging
 } = require('./indicators');
 
 const  {crossUp, crossDown} = require('./utils'); 
@@ -41,6 +42,6 @@ module.exports = {
     calculateHighest,
     calculateLowest,
     crossUp,
-    crossDown
-
+    crossDown,
+    isCandleRanging
 }

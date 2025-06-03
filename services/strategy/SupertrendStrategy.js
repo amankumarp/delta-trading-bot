@@ -1,12 +1,16 @@
 const { formatTimestamp , calculateProfitPercentage, convertOHLCVtoHeikinAshi} = require('./utils');
-const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI, calculateMACD, calculateSupertrend, calculateLowest, calculateHighest} = require('./indicators/index');
-const { calculateJurikVolatility, calculateSessions, calculateVolatility } = require('./indicators/indicators');
+const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI,  calculateSupertrend} = require('./indicators/index');
+const { calculateJurikVolatility, calculateSessions, calculateVolatility, calculateHFTCandles,isCandleRanging } = require('./indicators/indicators');
 
 class SupertrendAI {
     constructor() {
         this.atrLength = 11;
         this.multiplier = 2.5;
         this.sidewaysThreshold = 15;
+        this.riskPercent = 0.50; // 0.85% risk per trade
+        this.partialExitThreshold = 1; // 50% profit for partial exit
+        this.useHeikinAshiForSignal = true;
+
         this.ema200 = [];
         this.sma13 = [];
         this.atr = [];
@@ -17,11 +21,12 @@ class SupertrendAI {
         this.highest=[];
         this.trend = [];
         this.activeSignal=null;
-        this.useHeikinAshiForSignal = true;
     }
     
     generateSignals(data) {
         const { open, high, low, close, time, volume} = data;
+   
+       
         // Calculate indicators
         if(this.useHeikinAshiForSignal) {
             const ohlcv = { open, high, low, close, time, volume };
@@ -45,23 +50,27 @@ class SupertrendAI {
             this.volatility = calculateJurikVolatility(close,14,2);
             this.sessions = calculateSessions(time);
             this.volatilityMillionMoves = calculateVolatility(high, low, close);
+            
             // Calculate Supertrend
             const {supertrend}= calculateSupertrend(high, low, close, this.atrLength, this.multiplier);
             this.supertrend = supertrend;
         }
         // Calculate MACD
-     
-       
         
         // Generate buy/sell signals based on co
         const candles = [];
         const signals = [];
-        for (let i = 1; i < close.length; i++) {
+        let startIndex = 16;
+        for (let i = startIndex; i < close.length; i++) {
+            const h1_candles = calculateHFTCandles({open:open.slice(i-startIndex,i-1), high:high.slice(i-startIndex,i-1), low:low.slice(i-startIndex,i-1), close:close.slice(i-startIndex,i-1), timestamp:time.slice(i-startIndex,i-1), volume:volume.slice(i-startIndex,i-1)}, 15,60,0);
+            const candleRange = isCandleRanging({close:h1_candles.close, high:h1_candles.high, low:h1_candles.low, open:h1_candles.open});
+        //    console.log("close:",h1_candles.close,"high:",h1_candles.high,"open:",h1_candles.open,"low:",h1_candles.low,"timestamp:", h1_candles.timestamp ,);
             const isCrossUp = crossUp(close, this.supertrend);
             const isCrossDown = crossDown(close,this.supertrend);
            
-            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i]//&& (this.sessions[i] === "London–New York Overlap" || this.sessions[i] === "New York Session")
-            const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] //&& (this.sessions[i] === "London–New York Overlap" || this.sessions[i] === "New York Session")
+            const riskAnalysis = (Math.abs(close[i] - this.supertrend[i]) / this.supertrend[i]) * 100; // Calculate risk as percentage of supertrend
+            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i] && riskAnalysis <= this.riskPercent //&& candleRange.isSideways==false && candleRange.highest <= close[i]  //&& this.rsi[i] >= 40 //&& this.sessions[i] != "Tokyo Session";
+            const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] && riskAnalysis <= this.riskPercent //&& candleRange.isSideways==false && candleRange.lowest >= close[i] //&& this.rsi[i] >= 40 //&& this.sessions[i] != "Tokyo Session";
             const bull = Cbull && !(close[i-1] > this.ema200[i] && close[i] > this.ema200[i])
             const bear = Cbear && !(close[i-1] > this.ema200[i]  && close[i] > this.ema200[i])
             const Sbull = Cbull && (close[i-1] > this.ema200[i] && close[i] > this.ema200[i])
@@ -86,14 +95,14 @@ class SupertrendAI {
                     this.activeSignal=null;
                     signals.push({...exitSignal, profit:profitPct});
                 } 
-         
-                if(this.rsi[i] >= 80 && (this.activeSignal?.bullish) && this.activeSignal?.partialExit != true) {
+                profitPct = this.activeSignal?calculateProfitPercentage(this.activeSignal?.bullish, this.activeSignal.close, close[i]):0;
+                if((profitPct > 1) && (this.activeSignal?.bullish) && this.activeSignal?.partialExit != true) {
                     this.activeSignal.partialExit=true;
                     partialExit = { time:time[i], signal: 'partial exit',  price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
-                    profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
+                   
                     signals.push({...partialExit, profit:profitPct});
                
-                } else if(this.rsi[i] <= 20 &&this.activeSignal && !(this.activeSignal.bullish) && this.activeSignal?.partialExit !== true){
+                } else if((profitPct > 1)&&this.activeSignal && !(this.activeSignal.bullish) && this.activeSignal?.partialExit !== true){
                     this.activeSignal.partialExit=true;
                     partialExit = { time:time[i], signal: 'partial exit', price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
                     profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
@@ -140,6 +149,9 @@ class SupertrendAI {
                 lowerBandVol:this.volatility.dnValues[i],
                 priceJurik:this.volatility.priceJurikArr[i],
                 volatility: this.volatilityMillionMoves[i].volatilityStatus,
+                isCandleRanging: candleRange.isSideways,
+                highest:candleRange.highest,
+                lowest:candleRange.lowest,
                 session:this.sessions[i],
                 supertrend:this.supertrend[i],
                 partial_exit:partialExit?"partial_exit":null,
