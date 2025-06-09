@@ -6,11 +6,14 @@ class SupertrendAI {
     constructor() {
         this.atrLength = 11;
         this.multiplier = 2.5;
-        this.sidewaysThreshold = 15;
-        this.riskPercent = 0.50; // 0.85% risk per trade
-        this.partialExitThreshold = 1; // 50% profit for partial exit
+        this.atrMultiplier = 1.3; // ATR multiplier for stoploss
+        this.usePercentBaseSl = true; // Use percentage based stoploss
+        this.riskSl = 1;
+        this.riskPercent = 0.85; // 0.85% risk per trade
+        this.partialExitThreshold = 5; // 50% profit for partial exit
         this.useHeikinAshiForSignal = true;
-
+        this.ema8=[];
+        this.ema13 = [];
         this.ema200 = [];
         this.sma13 = [];
         this.atr = [];
@@ -33,9 +36,11 @@ class SupertrendAI {
             const {haOpen, haHigh, haLow, haClose } = convertOHLCVtoHeikinAshi(high, low, close, open, time );
             this.atr = calculateATR(haHigh, haLow, haClose, this.atrLength);
             this.ema200 = calculateEMA(haClose, 200);
+            this.ema8 = calculateEMA(haClose, 8);
+            this.ema13 = calculateEMA(haClose, 13);
             this.sma13 = calculateSMA(haClose, 13); // SMA can be approximated with EMA
             this.rsi = calculateRSI(haClose, 14);
-            this.volatility = calculateJurikVolatility(haClose,14,2);
+            // this.volatility = calculateJurikVolatility(haClose,14,2);
             this.sessions = calculateSessions(time);
             this.volatilityMillionMoves = calculateVolatility(haHigh, haLow, haClose);
             
@@ -45,9 +50,11 @@ class SupertrendAI {
         } else {
             this.atr = calculateATR(high, low, close, this.atrLength);
             this.ema200 = calculateEMA(close, 200);
+            this.ema8 = calculateEMA(haClose, 8);
+            this.ema13 = calculateEMA(haClose, 13);
             this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA       
             this.rsi = calculateRSI(close, 14);
-            this.volatility = calculateJurikVolatility(close,14,2);
+            // this.volatility = calculateJurikVolatility(close,14,2);
             this.sessions = calculateSessions(time);
             this.volatilityMillionMoves = calculateVolatility(high, low, close);
             
@@ -67,10 +74,16 @@ class SupertrendAI {
         //    console.log("close:",h1_candles.close,"high:",h1_candles.high,"open:",h1_candles.open,"low:",h1_candles.low,"timestamp:", h1_candles.timestamp ,);
             const isCrossUp = crossUp(close, this.supertrend);
             const isCrossDown = crossDown(close,this.supertrend);
-           
-            const riskAnalysis = (Math.abs(close[i] - this.supertrend[i]) / this.supertrend[i]) * 100; // Calculate risk as percentage of supertrend
-            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i] && riskAnalysis <= this.riskPercent //&& candleRange.isSideways==false && candleRange.highest <= close[i]  //&& this.rsi[i] >= 40 //&& this.sessions[i] != "Tokyo Session";
-            const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] && riskAnalysis <= this.riskPercent //&& candleRange.isSideways==false && candleRange.lowest >= close[i] //&& this.rsi[i] >= 40 //&& this.sessions[i] != "Tokyo Session";
+            const emaCrossUp = crossUp(this.ema8, this.ema13);
+            const emaCrossDown = crossDown(this.ema8, this.ema13);
+
+            let stoploss = isCrossUp[i]?high[i] - (this.atr[i] * this.atrMultiplier):low[i] + (this.atr[i] * this.atrMultiplier); //Calculate stoploss based on ATR
+            const riskAnalysis = (Math.abs(close[i] - stoploss) / stoploss) * 100; // Calculate risk as percentage of supertrend
+            
+            let commonCondition = this.sessions[i] != "Tokyo Session" && riskAnalysis <= this.riskPercent //&& this.rsi[i] >= 50  && candleRange.isSideways==false;
+
+            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i]  && commonCondition; //&& this.volatility.priceJurikArr[i] > 300 && candleRange.highest <= close[i] && this.sessions[i] != "Tokyo Session";
+            const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] && commonCondition;  //&& this.volatility.priceJurikArr[i] < -300//&& candleRange.lowest >= close[i] && this.sessions[i] != "Tokyo Session";
             const bull = Cbull && !(close[i-1] > this.ema200[i] && close[i] > this.ema200[i])
             const bear = Cbear && !(close[i-1] > this.ema200[i]  && close[i] > this.ema200[i])
             const Sbull = Cbull && (close[i-1] > this.ema200[i] && close[i] > this.ema200[i])
@@ -96,13 +109,13 @@ class SupertrendAI {
                     signals.push({...exitSignal, profit:profitPct});
                 } 
                 profitPct = this.activeSignal?calculateProfitPercentage(this.activeSignal?.bullish, this.activeSignal.close, close[i]):0;
-                if((profitPct > 1) && (this.activeSignal?.bullish) && this.activeSignal?.partialExit != true) {
+                if((profitPct > this.partialExitThreshold||emaCrossDown[i] && profitPct > 0) && (this.activeSignal?.bullish) && this.activeSignal?.partialExit != true) {
                     this.activeSignal.partialExit=true;
                     partialExit = { time:time[i], signal: 'partial exit',  price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
                    
                     signals.push({...partialExit, profit:profitPct});
                
-                } else if((profitPct > 1)&&this.activeSignal && !(this.activeSignal.bullish) && this.activeSignal?.partialExit !== true){
+                } else if((profitPct > this.partialExitThreshold||(emaCrossUp[i] && profitPct > 0))&&this.activeSignal && !(this.activeSignal.bullish) && this.activeSignal?.partialExit !== true){
                     this.activeSignal.partialExit=true;
                     partialExit = { time:time[i], signal: 'partial exit', price:close[i], date:formatTimestamp(time[i]), active:this.activeSignal};
                     profitPct = calculateProfitPercentage(partialExit.active.bullish, partialExit.active.close, partialExit.price);
@@ -136,6 +149,7 @@ class SupertrendAI {
             const candle = { 
                 time:time[i],
                 datetime:formatTimestamp(time[i]),
+                stoploss:stoploss,
                 open:open[i],   
                 high:high[i],
                 low:low[i],
@@ -144,10 +158,9 @@ class SupertrendAI {
                 atr:this.atr[i],
                 ema200:this.ema200[i],
                 sma13:this.sma13[i],
+                ema8:this.ema8[i],
+                ema13:this.ema13[i],
                 rsi:this.rsi[i],
-                upperBandVol:this.volatility.upValues[i],
-                lowerBandVol:this.volatility.dnValues[i],
-                priceJurik:this.volatility.priceJurikArr[i],
                 volatility: this.volatilityMillionMoves[i].volatilityStatus,
                 isCandleRanging: candleRange.isSideways,
                 highest:candleRange.highest,

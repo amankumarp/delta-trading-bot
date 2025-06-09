@@ -202,7 +202,7 @@ function calculateProfitPercentage(isBullish, entryPrice ,currentPrice) {
 
 function calculateRiskPercentage(trade, offset = 0) {
     const entry_price = trade.entry_price;
-    const stop_loss = trade.supertrend + offset;
+    const stop_loss = trade.stoploss + offset;
     let risk;
 
     if (trade.isLong) {
@@ -224,11 +224,16 @@ function generateTradeReport(data) {
         if(currentEntry && (record.partial_exit === "partial_exit"))   {
             currentEntry.partial_exit_price = record.close;
             currentEntry.partial_exit_time = record.datetime;
+
+            const profit = currentEntry.isLong
+                ? ((record.close - currentEntry.entry_price) / currentEntry.entry_price * 100).toFixed(2)
+                : ((currentEntry.entry_price - record.close) / currentEntry.entry_price * 100).toFixed(2);
+            currentEntry.partial_profit = profit;
         }
 
         if (currentEntry && (record.exit_signal === "exit")) {
             let isProfitable = (currentEntry.isLong && record.close > currentEntry.entry_price) || (currentEntry.isLong==false && record.close <  currentEntry.entry_price)?true:false;
-            let exit_price = isProfitable?record.close:currentEntry.supertrend; 
+            let exit_price = isProfitable?record.close:currentEntry.stoploss; 
             const profit = currentEntry.isLong
                 ? ((exit_price - currentEntry.entry_price) / currentEntry.entry_price * 100).toFixed(2)
                 : ((currentEntry.entry_price - exit_price) / currentEntry.entry_price * 100).toFixed(2);
@@ -239,7 +244,8 @@ function generateTradeReport(data) {
                 exit_time: record.datetime,
                 exit_price: exit_price,
                 risk_percentage: calculateRiskPercentage(currentEntry, 0),
-                profit: profit
+                profit: profit,
+                avg_profit: currentEntry?.partial_profit?((Number(currentEntry?.partial_profit) + Number(profit))/2).toFixed(2): profit,
             });
 
             currentEntry = null;
@@ -251,6 +257,7 @@ function generateTradeReport(data) {
                 entry_time: record.datetime,
                 entry_price: record.close,
                 supertrend: record.supertrend,
+                stoploss: record.stoploss,
                 rsi: record.rsi,
                 session: record.session,
                 open: record.open,
@@ -259,15 +266,14 @@ function generateTradeReport(data) {
                 close: record.close,
                 volume: record.volume,
                 atr: record.atr,
+                ema8: record.ema8,
+                ema13: record.ema13,
                 ema200: record.ema200,
                 sma13: record.sma13,
                 rsi: record.rsi,
                 isHCandleRanging: record.isCandleRanging,
                 h1_highest: record.highest,
                 h1_lowest: record.lowest,
-                upperBandVol:record.upperBandVol,
-                lowerBandVol: record.lowerBandVol,
-                priceJurik: record.priceJurik,
                 volatility: record.volatility,
                 isLong: record.new_signal.includes("Buy"),
                 
