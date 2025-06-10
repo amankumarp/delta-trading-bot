@@ -66,14 +66,14 @@ function main(){
 
                 if(prevCandle!=null && prevTrade!=null && Number(prevCandle.supertrend)!=Number(candle.supertrend)&& candle.exit_signal==null && candle.bullish===null && candle.partial_exit==null){
                     await telegramService.getTrailingStopMessage(config.SYMBOL,Number(candle.supertrend).toFixed(2),`Profit: ${candle.profit}%`);
-                    let slOrder = await getSLOrder();
-                    if(slOrder!=null){
-                        await exchagneService.editOrder(
-                            slOrder.order_id, 
-                            slOrder.product_id,
-                            prevTrade.bullish?Number(Number(candle.supertrend)-50).toFixed(2):Number(Number(candle.supertrend)+50).toFixed(2)
-                        );    
-                    }
+                    // let slOrder = await getSLOrder();
+                    // if(slOrder!=null){
+                    //     await exchagneService.editOrder(
+                    //         slOrder.order_id, 
+                    //         slOrder.product_id,
+                    //         prevTrade.bullish?Number(Number(candle.supertrend)-50).toFixed(2):Number(Number(candle.supertrend)+50).toFixed(2)
+                    //     );    
+                    // }
                     console.log("edit order called!")
                 }
 
@@ -84,14 +84,12 @@ function main(){
                     await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, 
                     candle.close, 
                     "", 
-                    Number(Number(candle.supertrend)-50).toFixed(2)
+                    Number(candle.stoploss).toFixed(2)
                     );
-                    let risk = Math.abs(candle.close - candle.supertrend);
-                    const risk_percentage = Number(Math.abs((risk / candle.close) * 100)).toFixed(2);
-                    if(risk_percentage < 0.8){
-                        let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 2, candle.close, "market_order",Number(Number(candle.supertrend)-50).toFixed(2));
-                        console.log("orderMarket:",orderMarket.result);
-                    }
+
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "buy", 2, candle.close, "market_order",Number(candle.stoploss).toFixed(2));
+                    console.log("orderMarket:",orderMarket.result);
+                    
 
                 }
 
@@ -99,14 +97,11 @@ function main(){
                     // Place Sell Order
                     console.log("sell order called!")
                     prevTrade = candle;
-                    await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.supertrend).toFixed(2));
-                    // placeOrder(config.SYMBOL, 'sell', 10, candle.close, 'limit_order', sl = candle.supertrend);
-                    let risk = Math.abs(candle.close - candle.supertrend);
-                    const risk_percentage = Number(Math.abs((risk / candle.close) * 100)).toFixed(2);
-                    if(risk_percentage < 0.8){
-                        let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",2, candle.close, "market_order",Number(Number(candle.supertrend)+50).toFixed(2));
-                        console.log("orderMarket:",orderMarket.result);
-                    }
+                    await telegramService.getTradeSignalMessage(candle.new_signal,config.SYMBOL, candle.close, "", Number(candle.stoploss).toFixed(2));
+ 
+                    let orderMarket = await exchagneService.placeOrder(config.SYMBOL, "sell",2, candle.close, "market_order",Number(candle.stoploss).toFixed(2));
+                    console.log("orderMarket:",orderMarket.result);
+
                 }
 
                 prevCandle = candle;

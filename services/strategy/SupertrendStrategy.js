@@ -79,8 +79,8 @@ class SupertrendAI {
 
             let stoploss = isCrossUp[i]?high[i] - (this.atr[i] * this.atrMultiplier):low[i] + (this.atr[i] * this.atrMultiplier); //Calculate stoploss based on ATR
             const riskAnalysis = (Math.abs(close[i] - stoploss) / stoploss) * 100; // Calculate risk as percentage of supertrend
-            
-            let commonCondition = this.sessions[i] != "Tokyo Session" && riskAnalysis <= this.riskPercent //&& this.rsi[i] >= 50  && candleRange.isSideways==false;
+            //this.sessions[i] != "Tokyo Session" &&
+            let commonCondition =  riskAnalysis <= this.riskPercent //&& this.rsi[i] >= 50  && candleRange.isSideways==false;
 
             const Cbull = isCrossUp[i] && close[i] >= this.sma13[i]  && commonCondition; //&& this.volatility.priceJurikArr[i] > 300 && candleRange.highest <= close[i] && this.sessions[i] != "Tokyo Session";
             const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] && commonCondition;  //&& this.volatility.priceJurikArr[i] < -300//&& candleRange.lowest >= close[i] && this.sessions[i] != "Tokyo Session";
