@@ -193,15 +193,15 @@ async function getSLOrder(){
 }
 
 
-async function getTPOrder(){
-    let orders = await exchagneService.getOrders();
-    let order = orders.result.filter((order)=>order.stop_order_type==="take_profit_order");
-    if(order.length==0){
-        return null;
-    }   
-    order = order[0];
-    return {order_id:order.id, product_id:order.product_id, exit_lots:order.size, side:order.side};
-}
+// async function getTPOrder(){
+//     let orders = await exchagneService.getOrders();
+//     let order = orders.result.filter((order)=>order.stop_order_type==="take_profit_order");
+//     if(order.length==0){
+//         return null;
+//     }   
+//     order = order[0];
+//     return {order_id:order.id, product_id:order.product_id, exit_lots:order.size, side:order.side};
+// }
 
 async function getPosition(symbol) {
     let positions = await exchagneService.getMarginedPositions();
@@ -213,44 +213,44 @@ async function getPosition(symbol) {
     return {product_id:position.product_id, size:position.size};
 }
 
-async function getBalance(){
-    let balance = await exchagneService.getWalletBalances();
-    return balance.result[0].available_balance_for_robo;
-}
+// async function getBalance(){
+//     let balance = await exchagneService.getWalletBalances();
+//     return balance.result[0].available_balance_for_robo;
+// }
 
-async function checkService(){
-    console.log('checking service');
-    let products = await exchagneService.getProducts();
-    // console.log(products);
-    let product = await exchagneService.getProduct("BTCUSD");
-    //  console.log(product);
+// async function checkService(){
+//     console.log('checking service');
+//     let products = await exchagneService.getProducts();
+//     // console.log(products);
+//     let product = await exchagneService.getProduct("BTCUSD");
+//     //  console.log(product);
 
-    let assets = await exchagneService.getAssets();
-    // console.log(assets);
+//     let assets = await exchagneService.getAssets();
+//     // console.log(assets);
 
-    let orderbook = await exchagneService.getOrderBook("BTCUSD");
-    console.log(orderbook);
+//     let orderbook = await exchagneService.getOrderBook("BTCUSD");
+//     console.log(orderbook);
 
-    let balance = await exchagneService.getWalletBalances();
-    console.log("balance:",balance.result[0].available_balance_for_robo);
+//     let balance = await exchagneService.getWalletBalances();
+//     console.log("balance:",balance.result[0].available_balance_for_robo);
 
-    let orders = await exchagneService.getOrders();
-    console.log("orders:",orders.result);
-    // let orderMarket = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "market_order");
-    // let stoploss = await exchagneService.bracketOrder(orderMarket.result, 82940, 0);
-    // console.log("stoploss:",stoploss.result);
+//     let orders = await exchagneService.getOrders();
+//     console.log("orders:",orders.result);
+//     // let orderMarket = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "market_order");
+//     // let stoploss = await exchagneService.bracketOrder(orderMarket.result, 82940, 0);
+//     // console.log("stoploss:",stoploss.result);
 
-    let positions = await exchagneService.getMarginedPositions();
-    console.log("positions:",positions.result);
+//     let positions = await exchagneService.getMarginedPositions();
+//     console.log("positions:",positions.result);
 
     
-    // let orderLimit = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "limit_order");
-    // let orderLimit = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "limit_order");
-    // console.log("order:",orderMarket);
+//     // let orderLimit = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "limit_order");
+//     // let orderLimit = await exchagneService.placeOrder("BTCUSD", "sell", 1, 10000, "limit_order");
+//     // console.log("order:",orderMarket);
 
-    // let cancle = await exchagneService.cancelOrder(orders.result[0]);
-    // console.log(cancle);
+//     // let cancle = await exchagneService.cancelOrder(orders.result[0]);
+//     // console.log(cancle);
 
-}
+// }
 
-// checkService();
+// // checkService();
