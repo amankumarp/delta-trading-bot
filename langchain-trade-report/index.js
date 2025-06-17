@@ -1,6 +1,4 @@
 const express = require("express");
-const { ChatDeepSeek } = require("@langchain/deepseek");
-const { PromptTemplate } = require("@langchain/core/prompts");
 const dotenv = require("dotenv");
 const axios = require("axios");
 
@@ -10,14 +8,6 @@ const app = express();
 const port = 4040;
 
 app.use(express.json());
-
-// LangChain setup
-const grok = new ChatDeepSeek({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  model: "deepseek-chat",
-  temperature: 0.7,
-  maxTokens: 1024,
-});
 
 
 function parseCustomDate(dateStr) {
@@ -32,6 +22,7 @@ function parseCustomDate(dateStr) {
 
   return isNaN(date.getTime()) ? null : date; // Return null if invalid date
 }
+
 
 // Analysis function
 async function analyzeTrades(trades) {
@@ -142,28 +133,6 @@ async function analyzeTrades(trades) {
     return acc;
   }, {});
 
-  // Technical Indicators Analysis
-  const avgDistEma200Wins = wins.length
-    ? (
-        wins.reduce(
-          (sum, t) => sum + Math.abs(t.entry_price - parseFloat(t.ema200)),
-          0
-        ) / wins.length
-      ).toFixed(2)
-    : "N/A";
-
-  const losingTrades = trades.filter((t) => t.avg_profit <= 0);
-  const avgDistEma200Loss = losingTrades.length
-    ? (
-        losingTrades.reduce(
-          (sum, t) => sum + Math.abs(t.entry_price - parseFloat(t.ema200)),
-          0
-        ) / losingTrades.length
-      ).toFixed(2)
-    : "N/A";
-  // const avgDistSMA13Wins = wins.map(t=> Math.abs(t.entry_price - parseFloat(t.sma13))).filter(Boolean);
-  // const avgDistSma13Loss = trades.filter(t => t.avg_profit <= 0).map(t=> Math.abs(t.entry_price - parseFloat(t.sma13))).filter(Boolean);
-
   // Best/Worst Trade
   const bestTrade = trades.reduce(
     (best, t) =>
@@ -192,6 +161,8 @@ async function analyzeTrades(trades) {
       if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
     }
   });
+
+
 
   //  Average R-Multiple (Reward/Risk Ratio)
   const avgRMultiple = trades.length
@@ -287,8 +258,8 @@ const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const dayOfWeekStats = {};
 
 trades.forEach(t => {
-  if (!t.exit_time) return;
-  const dateObj = parseCustomDate(t.exit_time);
+  if (!t.entry_time) return;
+  const dateObj = parseCustomDate(t.entry_time);
   if (!dateObj) return;
   const day = dayNames[dateObj.getDay()];
   if (!dayOfWeekStats[day]) dayOfWeekStats[day] = { profit: 0, count: 0, wins: 0 };
@@ -303,7 +274,8 @@ Object.keys(dayOfWeekStats).forEach(day => {
   const stats = dayOfWeekStats[day];
   dayOfWeekAnalysis[day] = {
     profit: stats.profit.toFixed(2),
-    winRate: stats.count ? ((stats.wins / stats.count) * 100).toFixed(2) : "0.00"
+    winRate: stats.count ? ((stats.wins / stats.count) * 100).toFixed(2) : "0.00",
+    count: stats.count
   };
 });
 
@@ -320,6 +292,24 @@ const dailyProfitValues = Object.values(dailyProfits);
 const maxProfitDay = dailyProfitValues.length ? Math.max(...dailyProfitValues).toFixed(2) : "N/A";
 const maxLossDay = dailyProfitValues.length ? Math.min(...dailyProfitValues).toFixed(2) : "N/A";
 
+//Monthly profit/loss grouping
+const monthlyProfits = {};
+trades.forEach(t => {
+  if (!t.exit_time) return;
+  const dateObj = parseCustomDate(t.exit_time);
+  if (!dateObj) return;
+  const month = dateObj.toISOString().slice(0, 7); // YYYY-MM
+  monthlyProfits[month] = (monthlyProfits[month] || 0) + (parseFloat(t.avg_profit) || 0);
+}
+);  
+
+const monthlyProfitValues = Object.values(monthlyProfits);
+const maxProfitMonthly = monthlyProfitValues.length ? Math.max(...monthlyProfitValues).toFixed(2) : "N/A";
+const maxLossMonthly = monthlyProfitValues.length ? Math.min(...monthlyProfitValues).toFixed(2) : "N/A";
+
+// stoploss touched calculate
+const stoplossTouched = trades.filter(t => t.stoploss_touched);
+
   return {
     startTime: trades[0].entry_time,
     endTime: trades[trades.length - 1].exit_time,
@@ -335,6 +325,18 @@ const maxLossDay = dailyProfitValues.length ? Math.min(...dailyProfitValues).toF
     maxDrawdown,
     avgProfit,
     avgRisk,
+    sharpeRatio,
+    maxWinStreak,
+    maxLossStreak,
+    avgRMultiple,
+    largestDrawdown,
+    avgDurationWins,
+    avgDurationLosses,
+    maxProfitDay,
+    maxLossDay,
+    maxProfitMonthly,
+    maxLossMonthly,
+    stoplossTouched: stoplossTouched.length,
     cumulativeProfit,
     sessionProfit,
     sessionCounts,
@@ -345,22 +347,13 @@ const maxLossDay = dailyProfitValues.length ? Math.min(...dailyProfitValues).toF
     posProfit,
     posCounts,
     posWinRates,
-    avgDistEma200Wins,
-    avgDistEma200Loss,
     bestTrade,
     worstTrade,
-    maxWinStreak,
-    maxLossStreak,
-    avgRMultiple,
     hourStats,
-    largestDrawdown,
-    sharpeRatio,
     profitBuckets,
     dayOfWeekAnalysis,
-    avgDurationWins,
-    avgDurationLosses,
-    maxProfitDay,
-    maxLossDay,
+    dailyProfits,
+    monthlyProfits
 
   };
 }

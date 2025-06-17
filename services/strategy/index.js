@@ -39,7 +39,7 @@ app.get('/strategy/supertrend-ai', async (req, res) => {
         // console.log(`Generated Supertrend signals for symbol: ${symbol}, interval: ${interval}`);
         if(onlytrade) {
             let trades = generateTradeReport(response.candles);
-            return res.json({trades:trades});
+            return res.json({trades});
         }
         return res.json({signal:response.signals,candles:response.candles});
     } catch (error) {

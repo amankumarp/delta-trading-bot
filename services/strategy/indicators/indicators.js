@@ -149,7 +149,6 @@ function calculateRSI(prices, period = 14) {
 }
 
 
-
 /**
  * 📌 Standard Deviation (Volatility Indicator)
  * @param {number[]} prices - Array of prices
@@ -259,7 +258,6 @@ function calculateStochastic(highs, lows, closes, period) {
         return ((closes[i] - lowestLow) / (highestHigh - lowestLow)) * 100;
     });
 }
-
 
 /**
  * Calculate the Supertrend Indicator.
@@ -380,7 +378,6 @@ function calculateHighest(values, period) {
     return highest;
 }
 
-
 /**
  * Calculates Volatility based on ATR, standard deviation, and SMA.
  * @param {number[]} prices - Array of closing prices.
@@ -468,8 +465,6 @@ function calculateJurikVolatility(prices, lengthJurik = 14, smoothJurik = 2) {
     return { upValues, dnValues, miValues, priceJurikArr };
 }
 
-
-
 function calculateSessions(timeArray) {
     const detectSession = (timestamp) =>{
         const date = new Date(timestamp * 1000);
@@ -503,7 +498,6 @@ function calculateSessions(timeArray) {
     return timeArray.map(detectSession);
 }
 
-
 function calculateARSI(close, length = 14, highlightMovements = true) {
     const arsi = [];
     const alphaArr = [];
@@ -525,6 +519,7 @@ function calculateARSI(close, length = 14, highlightMovements = true) {
 
     return  arsi;
 }
+
 function calculateUtBotAlerts( high, low, close, sensitivity = 1, atrPeriod = 10) {
     const result = [{
         index: 0,
@@ -630,7 +625,6 @@ function calculateHFTCandles({ open, high, low, close, volume, timestamp },  int
 
   return result;
 }
-
 
 // Function to check if the market is sideways
 function isCandleRanging(candles, rangeThresholdPercent = 0.7, closeRangePercent = 0.5) {

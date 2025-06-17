@@ -215,12 +215,37 @@ function calculateRiskPercentage(trade, offset = 0) {
     return Math.abs(risk_percentage).toFixed(2); // Return positive percentage
 }
 
+
 function generateTradeReport(data) {
-    const report = [];
+    const trades = [];
+
     let currentEntry = null;
 
     for (const record of data) {
-  
+        if(currentEntry){
+            // check stoploass touched incase of long check low > stoploss and for short check high < stoploss
+            if(currentEntry.isLong && record.low <= currentEntry.stoploss) {
+                currentEntry.stoploss_touched = true;
+            } else if((!currentEntry.isLong )&& record.high >= currentEntry.stoploss) {
+                currentEntry.stoploss_touched = true;
+            }
+
+            // calculate losspoint 
+            if(currentEntry.isLong) 
+                currentEntry.losspoint = Math.max(currentEntry.losspoint, Number(currentEntry.stoploss) - Number(record.low))
+            else    
+                currentEntry.losspoint = Math.max(currentEntry.losspoint, Number(record.high) - Number(currentEntry.stoploss))
+
+            // update maxpoint capture from entry price to current price
+            if(!currentEntry.stoploss_touched)
+                if(currentEntry.isLong) {
+                    currentEntry.maxpoint = Math.max(currentEntry.maxpoint, (Number(record.high) - Number(currentEntry.entry_price))/ (Number(currentEntry.entry_price) - Number(currentEntry.stoploss)))
+                    
+                } else {
+                    currentEntry.maxpoint = Math.max(currentEntry.maxpoint, (Number(currentEntry.entry_price) - Number(record.low))/(Number(currentEntry.entry_price) - Number(currentEntry.stoploss)));
+                }
+        }
+
         if(currentEntry && (record.partial_exit === "partial_exit"))   {
             currentEntry.partial_exit_price = record.close;
             currentEntry.partial_exit_time = record.datetime;
@@ -239,13 +264,13 @@ function generateTradeReport(data) {
                 : ((currentEntry.entry_price - exit_price) / currentEntry.entry_price * 100).toFixed(2);
                  
 
-            report.push({
+            trades.push({
                ...currentEntry,
                 exit_time: record.datetime,
                 exit_price: exit_price,
                 risk_percentage: calculateRiskPercentage(currentEntry, 0),
                 profit: profit,
-                avg_profit: currentEntry?.partial_profit?((Number(currentEntry?.partial_profit) + Number(profit))/2).toFixed(2): profit,
+                avg_profit: (currentEntry?.partial_profit?((Number(currentEntry?.partial_profit) + Number(profit))/2).toFixed(2): profit),
             });
 
             currentEntry = null;
@@ -271,18 +296,22 @@ function generateTradeReport(data) {
                 ema200: record.ema200,
                 sma13: record.sma13,
                 rsi: record.rsi,
+                adx: record.adx,
                 isHCandleRanging: record.isCandleRanging,
                 h1_highest: record.highest,
                 h1_lowest: record.lowest,
                 volatility: record.volatility,
+                // maxpoint: record.new_signal.includes("Buy") ? (Number(record.high)-(record.close)) : (Number(record.close) - Number(record.low)),
+                losspoint: record.new_signal.includes("Buy") ? (Number(record.high)-(record.close)) : (Number(record.close) - Number(record.low)), 
+                maxpoint:0, 
+                stoploss_touched: false,
                 isLong: record.new_signal.includes("Buy"),
                 
             };
         }
-
     }
 
-    return report;
+    return trades;
 }
 
 
