@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Home, BarChart2, TrendingUp, Cpu, Target, Save, RefreshCw, Info } from 'lucide-react';
+import { Home, BarChart2, TrendingUp, Cpu, Target, Save, RefreshCw, Info, Database } from 'lucide-react'; // Added Database icon
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
@@ -112,6 +112,243 @@ const CustomTooltip = ({ active, payload, label }) => {
     return null;
 };
 
+// New component for GitHub-style daily profit chart
+const GitHubDailyProfitsChart = ({ dailyProfits, startTime, endTime }) => {
+    // Determine the date range for the calendar view
+    const parsedStartDate = startTime ? new Date(startTime.split(', ')[0]) : new Date();
+    parsedStartDate.setUTCHours(0, 0, 0, 0); // Normalize to start of day UTC
+
+    const parsedEndDate = endTime ? new Date(endTime.split(', ')[0]) : new Date();
+    parsedEndDate.setUTCHours(0, 0, 0, 0); // Normalize to start of day UTC
+
+    // Adjust start date to the beginning of the year of the earliest trade, or current year if no trades
+    const displayStartDate = new Date(parsedStartDate.getFullYear(), 0, 1); // January 1st of the start year
+    displayStartDate.setUTCHours(0, 0, 0, 0);
+
+    // Adjust end date to the end of the year of the latest trade, or current year if no trades
+    const displayEndDate = new Date(parsedEndDate.getFullYear(), 11, 31); // December 31st of the end year
+    displayEndDate.setUTCHours(0, 0, 0, 0);
+
+
+    const days = [];
+    let currentDate = new Date(displayStartDate);
+
+    while (currentDate <= displayEndDate) {
+        days.push(new Date(currentDate));
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1); // Use UTC date to avoid timezone issues
+    }
+
+    // Prepare data for the heatmap
+    const profitsMap = new Map();
+    Object.entries(dailyProfits).forEach(([dateStr, profit]) => {
+        profitsMap.set(dateStr, parseFloat(profit));
+    });
+
+    // Determine min/max profits for color scaling (excluding 0 for neutral)
+    const profitValues = Array.from(profitsMap.values()).filter(p => p !== 0);
+    const minProfit = profitValues.length > 0 ? Math.min(...profitValues) : 0;
+    const maxProfit = profitValues.length > 0 ? Math.max(...profitValues) : 0;
+
+    const getColor = (profit) => {
+        if (profit === 0) return 'bg-gray-700'; // Break even
+        if (profit > 0) {
+            // Scale green based on positive profit
+            const intensity = Math.min(1, profit / (maxProfit === 0 ? 1 : maxProfit));
+            if (intensity > 0.75) return 'bg-green-600';
+            if (intensity > 0.5) return 'bg-green-500';
+            if (intensity > 0.25) return 'bg-green-400';
+            return 'bg-green-300';
+        } else {
+            // Scale red based on negative profit
+            const intensity = Math.min(1, Math.abs(profit) / (Math.abs(minProfit) === 0 ? 1 : Math.abs(minProfit)));
+            if (intensity > 0.75) return 'bg-red-600';
+            if (intensity > 0.5) return 'bg-red-500';
+            if (intensity > 0.25) return 'bg-red-400';
+            return 'bg-red-300';
+        }
+    };
+
+    // Group days by week and fill leading nulls for aligning to Sunday
+    const weeks = [];
+    let currentWeek = [];
+    let firstDayOffset = displayStartDate.getUTCDay(); // Day of week for displayStartDate (0=Sunday)
+
+    for (let i = 0; i < firstDayOffset; i++) {
+        currentWeek.push(null);
+    }
+
+    days.forEach((day) => {
+        currentWeek.push(day);
+        if (day.getUTCDay() === 6) { // Sunday (end of week based on getUTCDay())
+            weeks.push(currentWeek);
+            currentWeek = [];
+        }
+    });
+    if (currentWeek.length > 0) {
+        // Pad the end of the last week if it doesn't end on Saturday
+        for (let i = currentWeek.length; i < 7; i++) {
+            currentWeek.push(null);
+        }
+        weeks.push(currentWeek);
+    }
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    // Generate month headers
+    const monthHeaders = [];
+    let currentMonthIdx = displayStartDate.getUTCMonth();
+    let currentYear = displayStartDate.getUTCFullYear();
+    let daysInMonthCount = 0;
+
+    // Adjust the first month's starting position based on the first day of displayStartDate
+    const startOffsetForFirstMonth = displayStartDate.getUTCDay(); // Days from Sunday to start of first month
+
+    for (let i = 0; i < weeks.length; i++) {
+        const week = weeks[i];
+        for (let j = 0; j < week.length; j++) {
+            const day = week[j];
+            if (day && (day.getUTCMonth() !== currentMonthIdx || day.getUTCFullYear() !== currentYear)) {
+                // New month or year, push previous header if it exists
+                if (daysInMonthCount > 0) {
+                    monthHeaders.push({
+                        name: `${monthNames[currentMonthIdx]} ${currentYear}`,
+                        span: Math.ceil(daysInMonthCount / 7), // Approximate span in weeks
+                    });
+                }
+                currentMonthIdx = day.getUTCMonth();
+                currentYear = day.getUTCFullYear();
+                daysInMonthCount = 1;
+            } else if (day) {
+                daysInMonthCount++;
+            }
+        }
+    }
+    // Add the last month header
+    if (daysInMonthCount > 0) {
+        monthHeaders.push({
+            name: `${monthNames[currentMonthIdx]} ${currentYear}`,
+            span: Math.ceil(daysInMonthCount / 7),
+        });
+    }
+
+
+    return (
+        <div className="flex flex-col items-start space-y-2 overflow-x-auto p-4 bg-gray-800 rounded-xl shadow-lg">
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-200 mb-4">Daily Profit Heatmap (GitHub-style)</h3>
+            <div className="flex w-full min-w-max">
+                <div className="flex flex-col w-10 text-right text-xs font-medium text-gray-400 pt-6 pr-1 flex-shrink-0">
+                    {dayNames.map((day, index) => (
+                        // Only show Mon, Wed, Fri for less clutter, or all for detail
+                        (index === 1 || index === 3 || index === 5) ? (
+                            <div key={day} className="h-5 flex items-center justify-end">{day}</div>
+                        ) : (
+                            <div key={day} className="h-5 flex items-center justify-end opacity-0">.</div>
+                        )
+                    ))}
+                </div>
+                <div className="flex flex-col flex-grow overflow-x-auto">
+                    {/* Month headers dynamic based on weeks */}
+                    <div className="flex">
+                        {weeks.map((week, weekIdx) => {
+                            // Find the month of the first day in this week that is not null
+                            const firstDayInWeek = week.find(day => day !== null);
+                            const monthOfFirstDay = firstDayInWeek ? firstDayInWeek.getUTCMonth() : null;
+                            const yearOfFirstDay = firstDayInWeek ? firstDayInWeek.getUTCFullYear() : null;
+
+                            // Check if this week starts a new month or is the very first week with content
+                            const previousWeekLastDayMonth = (weekIdx > 0 && weeks[weekIdx-1].some(d => d !== null)) ?
+                                (weeks[weekIdx-1].findLast(d => d !== null).getUTCMonth()) : -1;
+                            const previousWeekLastDayYear = (weekIdx > 0 && weeks[weekIdx-1].some(d => d !== null)) ?
+                                (weeks[weekIdx-1].findLast(d => d !== null).getUTCFullYear()) : -1;
+
+                            const isNewMonth = (firstDayInWeek && (monthOfFirstDay !== previousWeekLastDayMonth || yearOfFirstDay !== previousWeekLastDayYear));
+
+                            // Calculate the number of actual content days in this week that are part of the new month
+                            let daysInNewMonthInWeek = 0;
+                            if (isNewMonth) {
+                                for(let i = 0; i < week.length; i++) {
+                                    if(week[i] && week[i].getUTCMonth() === monthOfFirstDay && week[i].getUTCFullYear() === yearOfFirstDay) {
+                                        daysInNewMonthInWeek++;
+                                    }
+                                }
+                            }
+
+                            // Only render month name if it's the start of a new month within the calendar view,
+                            // or for the very first non-null day if it's not Jan 1st.
+                            // This logic is still a bit tricky to get perfect for month headers with variable week starts.
+                            // A simpler approach for month headers is often to display them above fixed column spans.
+                            // For simplicity and alignment, we'll try to place them dynamically, or fall back to
+                            // a fixed header if this becomes too complex.
+                            // For now, let's keep it simple and approximate.
+                            // A better solution would involve calculating the exact column span for each month.
+                            // For a truly "GitHub-like" experience, the months usually sit above fixed-width weeks.
+
+                            return (
+                                <div key={`month-col-${weekIdx}`} className="flex flex-col flex-shrink-0">
+                                    {isNewMonth && (
+                                        <div className="text-center text-xs font-semibold text-gray-400 absolute"
+                                            style={{
+                                                left: `${(weekIdx * 28) + 40}px`, // Adjust based on cell width + margin + day name column
+                                                marginTop: '-20px' // Position above the grid
+                                            }}
+                                        >
+                                            {firstDayInWeek ? `${monthNames[monthOfFirstDay]}` : ''}
+                                        </div>
+                                    )}
+                                    {/* Placeholder for the actual week column, which follows */}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="flex flex-grow overflow-x-auto">
+                        {weeks.map((week, weekIndex) => (
+                            <div key={weekIndex} className="flex flex-col ml-1 flex-shrink-0">
+                                {week.map((day, dayIndex) => {
+                                    const dateKey = day ? day.toISOString().slice(0, 10) : null;
+                                    const profit = profitsMap.get(dateKey) || 0;
+                                    const tooltipText = day ?
+                                        `${day.toDateString()}\nProfit: ${formatCurrency(profit)}` : 'No data';
+                                    return (
+                                        <div
+                                            key={dayIndex}
+                                            className={`w-5 h-5 rounded-sm m-0.5 flex items-center justify-center text-xs text-transparent hover:text-white cursor-pointer transition-colors duration-100 ${day ? getColor(profit) : 'bg-gray-900 opacity-50'}`}
+                                            title={tooltipText}
+                                        >
+                                            {/* {day ? day.getUTCDate() : ''} */}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+            {/* Legend for the heatmap */}
+            <div className="flex justify-center items-center gap-2 text-sm text-gray-400 mt-4 self-center">
+                <span className="text-white">Less Profit/More Loss</span>
+                <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-red-300 rounded-sm"></div>
+                    <div className="w-4 h-4 bg-red-400 rounded-sm"></div>
+                    <div className="w-4 h-4 bg-red-500 rounded-sm"></div>
+                    <div className="w-4 h-4 bg-red-600 rounded-sm"></div>
+                </div>
+                <div className="w-4 h-4 bg-gray-700 rounded-sm" title="Break Even"></div>
+                <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-green-300 rounded-sm"></div>
+                    <div className="w-4 h-4 bg-green-400 rounded-sm"></div>
+                    <div className="w-4 h-4 bg-green-500 rounded-sm"></div>
+                    <div className="w-4 h-4 bg-green-600 rounded-sm"></div>
+                </div>
+                <span className="text-white">More Profit/Less Loss</span>
+                <div className="w-4 h-4 bg-gray-900 opacity-50 rounded-sm" title="No Trade Day"></div>
+                <span className="text-white">No Trade Day</span>
+            </div>
+        </div>
+    );
+};
+
+
 // Main App component
 const App = () => {
     const [analysisData, setAnalysisData] = useState(initialAnalysisData);
@@ -144,6 +381,15 @@ const App = () => {
         maxDrawdown: ''
     });
     const [hypothesisResults, setHypothesisResults] = useState(null);
+
+    // New states for API Integration
+    const [apiSymbol, setApiSymbol] = useState('BTCUSD');
+    const [apiInterval, setApiInterval] = useState('15m');
+    const [apiStartDate, setApiStartDate] = useState(''); // YYYY-MM-DD
+    const [apiEndDate, setApiEndDate] = useState('');     // YYYY-MM-DD
+    const [apiLoadingData, setApiLoadingData] = useState(false);
+    const [apiError, setApiError] = useState('');
+
 
     // Firebase Initialization and Authentication
     useEffect(() => {
@@ -321,12 +567,13 @@ const App = () => {
         }))
     , [analysisData.posProfit]);
 
-    const dailyProfitsChartData = useMemo(() =>
-        Object.entries(analysisData.dailyProfits).map(([date, profit]) => ({
-            date,
-            profit: parseFloat(profit)
-        })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    , [analysisData.dailyProfits]);
+    // Daily profits data is now passed directly to GitHubDailyProfitsChart component
+    // const dailyProfitsChartData = useMemo(() =>
+    //     Object.entries(analysisData.dailyProfits).map(([date, profit]) => ({
+    //         date,
+    //         profit: parseFloat(profit)
+    //     })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    // , [analysisData.dailyProfits]);
 
     const monthlyProfitsChartData = useMemo(() =>
         Object.entries(analysisData.monthlyProfits).map(([month, profit]) => ({
@@ -527,6 +774,58 @@ const App = () => {
         setHypothesisCriteria(prev => ({ ...prev, [name]: value }));
     };
 
+    // Function to convert YYYY-MM-DD to Unix timestamp in seconds
+    const dateToUnixSeconds = (dateString) => {
+        if (!dateString) return null;
+        const date = new Date(dateString);
+        return Math.floor(date.getTime() / 1000); // Convert milliseconds to seconds
+    };
+
+    // Function to fetch data from the external API
+    const fetchExternalData = useCallback(async () => {
+        setApiLoadingData(true);
+        setApiError('');
+        try {
+            const startTimestamp = dateToUnixSeconds(apiStartDate);
+            const endTimestamp = dateToUnixSeconds(apiEndDate);
+
+            if (!apiSymbol || !apiInterval || !startTimestamp || !endTimestamp) {
+                setApiError("Please fill all API fields (Symbol, Interval, Start Date, End Date).");
+                setApiLoadingData(false);
+                return;
+            }
+
+            const apiUrl = `http://localhost:4040/api/analyze?symbol=${apiSymbol}&interval=${apiInterval}&start=${startTimestamp}&end=${endTimestamp}`;
+            console.log("Fetching from API:", apiUrl);
+
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API error: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log("API Response:", data);
+
+            // Assuming API returns data in a similar structure to initialAnalysisData and initialTradesData
+            if (data.analysis && data.trades) {
+                setAnalysisData(data.analysis);
+                setTradesData(data.trades);
+                // Also save to Firestore
+                saveDataToFirestore(data.analysis, data.trades);
+            } else {
+                setApiError("API response did not contain expected 'analysis' and 'trades' keys. Ensure the API returns JSON with 'analysis' and 'trades' properties.");
+            }
+
+        } catch (error) {
+            console.error("Error fetching external data:", error);
+            setApiError(`Failed to fetch data: ${error.message}`);
+        } finally {
+            setApiLoadingData(false);
+        }
+    }, [apiSymbol, apiInterval, apiStartDate, apiEndDate, saveDataToFirestore]);
+
+
     // Show a loading spinner until data is fetched/initialized
     if (loading) {
         return (
@@ -594,6 +893,14 @@ const App = () => {
                                 className={`w-full text-left py-3 px-4 rounded-lg flex items-center gap-3 transition-all duration-200 ${activeTab === 'hypothesis' ? 'bg-indigo-700 text-white shadow-md' : 'text-gray-300 hover:bg-gray-800 hover:text-indigo-300'}`}
                             >
                                 <Target size={20} /> Hypothesis Testing
+                            </button>
+                        </li>
+                        <li className="mb-3">
+                            <button
+                                onClick={() => setActiveTab('api-data')}
+                                className={`w-full text-left py-3 px-4 rounded-lg flex items-center gap-3 transition-all duration-200 ${activeTab === 'api-data' ? 'bg-indigo-700 text-white shadow-md' : 'text-gray-300 hover:bg-gray-800 hover:text-indigo-300'}`}
+                            >
+                                <Database size={20} /> External Data
                             </button>
                         </li>
                     </ul>
@@ -774,34 +1081,28 @@ const App = () => {
                             </ResponsiveContainer>
                         </div>
 
-                        {/* Daily and Monthly Profits */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                            <div className="bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
-                                <h3 className="text-xl sm:text-2xl font-bold text-gray-200 mb-6">Daily Profits</h3>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <LineChart data={dailyProfitsChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#4a5568" />
-                                        <XAxis dataKey="date" stroke="#cbd5e0" />
-                                        <YAxis stroke="#cbd5e0" />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend />
-                                        <Line type="monotone" dataKey="profit" stroke="#a4de6c" name="Daily Profit" />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
-                                <h3 className="text-xl sm:text-2xl font-bold text-gray-200 mb-6">Monthly Profits</h3>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <BarChart data={monthlyProfitsChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#4a5568" />
-                                        <XAxis dataKey="month" stroke="#cbd5e0" />
-                                        <YAxis stroke="#cbd5e0" />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend />
-                                        <Bar dataKey="profit" fill="#d0ed57" name="Monthly Profit" />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
+                        {/* Daily Profits - Now GitHub-style heatmap */}
+                        <div className="bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 mb-8">
+                            <GitHubDailyProfitsChart
+                                dailyProfits={analysisData.dailyProfits}
+                                startTime={analysisData.startTime}
+                                endTime={analysisData.endTime}
+                            />
+                        </div>
+
+                        {/* Monthly Profits */}
+                        <div className="bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 mb-8">
+                            <h3 className="text-xl sm:text-2xl font-bold text-gray-200 mb-6">Monthly Profits</h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={monthlyProfitsChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#4a5568" />
+                                    <XAxis dataKey="month" stroke="#cbd5e0" />
+                                    <YAxis stroke="#cbd5e0" />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Legend />
+                                    <Bar dataKey="profit" fill="#d0ed57" name="Monthly Profit" />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
 
                         {/* Hourly Stats and Day of Week Analysis */}
@@ -1105,6 +1406,79 @@ const App = () => {
                                     {hypothesisResults.totalTrades === 0 && (
                                         <p className="mt-4 text-orange-400">No trades matched the specified criteria.</p>
                                     )}
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                )}
+
+                {activeTab === 'api-data' && (
+                    <section id="api-data" className="mb-12">
+                        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-8">Fetch External Data</h2>
+                        <div className="bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
+                            <p className="text-gray-300 mb-4">
+                                Fetch new trading data from an external API. The dashboard will update with the new data.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label htmlFor="api-symbol" className="block text-gray-300 text-sm font-bold mb-2">Symbol (e.g., BTCUSD):</label>
+                                    <input
+                                        type="text"
+                                        id="api-symbol"
+                                        value={apiSymbol}
+                                        onChange={(e) => setApiSymbol(e.target.value)}
+                                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-100 bg-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="BTCUSD"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="api-interval" className="block text-gray-300 text-sm font-bold mb-2">Interval (e.g., 15m):</label>
+                                    <input
+                                        type="text"
+                                        id="api-interval"
+                                        value={apiInterval}
+                                        onChange={(e) => setApiInterval(e.target.value)}
+                                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-100 bg-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="15m"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="api-start-date" className="block text-gray-300 text-sm font-bold mb-2">Start Date:</label>
+                                    <input
+                                        type="date"
+                                        id="api-start-date"
+                                        value={apiStartDate}
+                                        onChange={(e) => setApiStartDate(e.target.value)}
+                                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-100 bg-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="api-end-date" className="block text-gray-300 text-sm font-bold mb-2">End Date:</label>
+                                    <input
+                                        type="date"
+                                        id="api-end-date"
+                                        value={apiEndDate}
+                                        onChange={(e) => setApiEndDate(e.target.value)}
+                                        className="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-100 bg-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={fetchExternalData}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2"
+                                disabled={apiLoadingData}
+                            >
+                                {apiLoadingData ? (
+                                    <>
+                                        <RefreshCw className="animate-spin" size={18} /> Fetching...
+                                    </>
+                                ) : (
+                                    'Fetch Data'
+                                )}
+                            </button>
+                            {apiError && (
+                                <div className="mt-4 p-3 bg-red-800 text-red-100 rounded-lg shadow-inner">
+                                    Error: {apiError}
                                 </div>
                             )}
                         </div>
