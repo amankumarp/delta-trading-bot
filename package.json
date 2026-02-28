@@ -12,10 +12,9 @@
     "schema": "services/paper-trade/prisma/schema.prisma"
   },
   "scripts": {
-    "start": "concurrently --names \"market-data,strategy,order-execution,backtest,paper-trade,main\" --prefix-colors \"cyan,green,magenta,yellow,blue,red\" \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"  \"npm run start:backtest\"  \"node main.js\"",
+    "start": "concurrently --names \"market-data,strategy,order-execution,,paper-trade,main\" --prefix-colors \"cyan,green,magenta,yellow,blue,red\" \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"   \"node main.js\"",
     "start:market-data": "nodemon services/market-data/index.js",
     "start:strategy": "nodemon services/strategy/index.js",
-    "start:backtest": "nodemon services/backtest/index.js",
     "start:order-execution": "nodemon services/order-execution/index.js",
     "start:paper-trade": "nodemon services/paper-trade/index.js",
     "test": "echo \"No tests defined yet.\" && exit 0"

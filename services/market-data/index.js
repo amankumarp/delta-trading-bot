@@ -1,100 +1,25 @@
 const express = require('express');
-const axios = require('axios');
-const { parseIntervalToSeconds } = require('./utils');
-const config = require('../../config/index');
-const cors = require('cors');
+const { getCandles } = require('./candleService');
+
 const app = express();
-app.use(cors());
-const PORT = process.env.MARKET_DATA_PORT || 3001;
-const router = express.Router();
-const DELTA_API_BASE_URL = 'https://api.india.delta.exchange/v2';
+require('./jobs/syncJob'); // start the sync job
+const {runBackfillAll} = require('./jobs/backfill'); // optional: run backfill on startup
 
-// Helper to fetch candles in chunks
-async function fetchCandleChunks(symbol, interval, start, end) {
-    const CHUNK_SIZE = 200; // Max 200 candles per request
-    const intervalSec = parseIntervalToSeconds(interval);
-    let allCandles = [];
-
-    let from = start;
-    while (from < end) {
-        const to = Math.min(from + CHUNK_SIZE * intervalSec, end);
-
-        try {
-            const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {
-                params: {
-                    symbol,
-                    resolution: interval,
-                    start: from,
-                    end: to,
-                },
-            });
-
-            const candles = response.data.result || [];
-            allCandles = allCandles.concat(candles);
-
-            if (candles.length === 0) break; // No more data
-        } catch (err) {
-            console.log(`Chunk fetch failed: ${err.message}`);
-            break;
-        }
-
-        from = to;
-    }
-
-    return allCandles;
-}
-
-// Route to fetch OHLCV data
-router.get('/ohlcv', async (req, res) => {
-    const { symbol, interval, start, end } = req.query;
-
-    if (!symbol || !interval) {
-        console.warn('Missing required query parameters: symbol, interval');
-        return res.status(400).json({ error: 'Missing required query parameters: symbol, interval' });
-    }
-
-    try {
-        const now = Math.floor(Date.now() / 1000);
-        const intervalSec = parseIntervalToSeconds(interval);
-
-        const defaultEnd = now;
-        const defaultStart = now - 200 * intervalSec;
-
-        const startTime = parseInt(start) || defaultStart;
-        const endTime = parseInt(end) || defaultEnd;
-
-        let candles;
-
-        if (start=="undefined" && end=="undefined") {
-            // Only 200 candles
-            const response = await axios.get(`${DELTA_API_BASE_URL}/history/candles`, {
-                params: {
-                    symbol,
-                    resolution: interval,
-                    start: startTime,
-                    end: endTime,
-                },
-            });
-            candles = response.data.result.reverse();
-        } else {
-            // Fetch in chunks
-        
-            candles = await fetchCandleChunks(symbol, interval, startTime, endTime);
-        }
-
-        // logger.info(`📊 Fetched ${candles.length} candles for ${symbol} (${interval})`);
-        res.json(candles.sort((a, b) => a.time - b.time));
-    } catch (error) {
-        console.log(`❌ Error fetching OHLCV data: ${error.message}`);
-        res.status(500).json({ error: 'Failed to fetch OHLCV data' });
-    }
+app.get('/api/candles', async (req, res) => {
+  const { symbol, interval, from, to, type } = req.query;
+  
+  try {
+    const candles = await getCandles({
+      symbol,
+      interval,
+      from: from ? parseInt(from) : undefined,
+      to: to ? parseInt(to) : undefined,
+      type,
+    });
+    res.json(candles);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-app.use('/api', router);
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`🚀 Market Data Service running on port ${PORT}`);
-});
-
-module.exports = router;
+app.listen(3000, () => {console.log("Candle API running at http://localhost:3000"); runBackfillAll()});

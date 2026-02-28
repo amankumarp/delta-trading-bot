@@ -663,6 +663,69 @@ function isCandleRanging(candles, rangeThresholdPercent = 0.7, closeRangePercent
 }
 
 
+function detectSwings(high, low, lookback = 5) {
+    const swingHighs = [];
+    const swingLows = [];
+
+    for (let i = lookback; i < high.length - lookback; i++) {
+        let isHigh = true;
+        let isLow = true;
+
+        for (let j = 1; j <= lookback; j++) {
+            if (high[i] <= high[i - j] || high[i] <= high[i + j])
+                isHigh = false;
+
+            if (low[i] >= low[i - j] || low[i] >= low[i + j])
+                isLow = false;
+        }
+
+        if (isHigh) swingHighs.push({ index: i, price: high[i] });
+        if (isLow) swingLows.push({ index: i, price: low[i] });
+    }
+
+    return { swingHighs, swingLows };
+}
+
+
+function buildValidatedTrendline(swings, type = "up") {
+    if (swings.length < 3) return null;
+
+    const validTouches = [];
+    
+    for (let i = 0; i < swings.length - 2; i++) {
+        const p1 = swings[i];
+        const p2 = swings[i + 1];
+
+        const slope = (p2.price - p1.price) / (p2.index - p1.index);
+
+        // Reject steep slope
+        if (Math.abs(slope) > 0.5) continue;
+
+        let touchCount = 2;
+
+        for (let j = i + 2; j < swings.length; j++) {
+            const projected = slope * swings[j].index + 
+                (p1.price - slope * p1.index);
+
+            const distance = Math.abs(projected - swings[j].price);
+
+            if (distance < swings[j].price * 0.002) { // 0.2% tolerance
+                touchCount++;
+            }
+        }
+
+        if (touchCount >= 3) {
+            validTouches.push({
+                slope,
+                intercept: p1.price - slope * p1.index,
+                touchCount
+            });
+        }
+    }
+
+    return validTouches.length ? validTouches[validTouches.length - 1] : null;
+}
+
 module.exports = {  
     calculateEMA, 
     calculateATR,

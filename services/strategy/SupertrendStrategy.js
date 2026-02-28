@@ -1,16 +1,19 @@
 const { formatTimestamp , calculateProfitPercentage, convertOHLCVtoHeikinAshi} = require('./utils');
 const { crossDown, crossUp, calculateATR,calculateEMA,calculateSMA,calculateRSI,  calculateSupertrend} = require('./indicators/index');
 const { calculateJurikVolatility, calculateSessions, calculateVolatility, calculateHFTCandles,isCandleRanging, calculateADX } = require('./indicators/indicators');
+const { lowest } = require('technicalindicators');
+const BaseStrategy = require('./base/BaseStrategy');
 
-class SupertrendAI {
+class SupertrendAI extends BaseStrategy {
     constructor() {
+        super();
         this.atrLength = 11;
         this.multiplier = 2.5;
         this.atrMultiplier = 1.5; // ATR multiplier for stoploss
         this.usePercentBaseSl = true; // Use percentage based stoploss
         this.riskPercent = 0.85; // 0.85% risk per trade
-        this.partialExitThreshold = 5; // 50% profit for partial exit
-        this.useHeikinAshiForSignal = true;
+        this.partialExitThreshold = 2; // 50% profit for partial exit
+        this.useHeikinAshiForSignal = false;
         this.ema8=[];
         this.ema13 = [];
         this.ema200 = [];
@@ -55,7 +58,6 @@ class SupertrendAI {
             this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA       
             this.rsi = calculateRSI(close, 14);
             // this.adx = calculateADX(high, low, close, 14);
-            // this.volatility = calculateJurikVolatility(close,14,2);
             this.sessions = calculateSessions(time);
             this.volatilityMillionMoves = calculateVolatility(high, low, close);
             
@@ -77,13 +79,15 @@ class SupertrendAI {
             const isCrossDown = crossDown(close,this.supertrend);
             const emaCrossUp = crossUp(this.ema8, this.ema13);
             const emaCrossDown = crossDown(this.ema8, this.ema13);
-
+            // let stoploss = isCrossUp[i]?candleRange.lowest: candleRange.highest; // Default stoploss based on candle range
             let stoploss = isCrossUp[i]? high[i] - (this.atr[i] * this.atrMultiplier):low[i] + (this.atr[i] * this.atrMultiplier);
-            // stoploss = isCrossUp[i] ? stoploss > low[i] ? stoploss = low[i] : stoploss : stoploss < high[i] ? stoploss = high[i] : stoploss;
-            // stoploss = isCrossUp[i] ? stoploss > this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss : stoploss < this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss;
+            stoploss = isCrossUp[i] ? stoploss > low[i] ? stoploss = low[i] : stoploss : stoploss < high[i] ? stoploss = high[i] : stoploss;
+            stoploss = isCrossUp[i] ? stoploss > this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss : stoploss < this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss;
             const riskAnalysis = (Math.abs(close[i] - stoploss) / stoploss) * 100; // Calculate risk as percentage of supertrend
             //this.sessions[i] != "Tokyo Session" &&
-            let commonCondition =  riskAnalysis <= this.riskPercent//&& new Date(time[i]*1000).getDay() !== 6//&& this.rsi[i] >= 50  && candleRange.isSideways==false;
+
+
+            let commonCondition =  riskAnalysis <= this.riskPercent;//&& new Date(time[i]*1000).getDay() !== 6//&& this.rsi[i] >= 50  && 
 
             const Cbull = isCrossUp[i] && close[i] >= this.sma13[i]  && commonCondition; //&& this.volatility.priceJurikArr[i] > 300 && candleRange.highest <= close[i] && this.sessions[i] != "Tokyo Session";
             const Cbear = isCrossDown[i]&& close[i] <= this.sma13[i] && commonCondition;  //&& this.volatility.priceJurikArr[i] < -300//&& candleRange.lowest >= close[i] && this.sessions[i] != "Tokyo Session";

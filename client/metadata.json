@@ -1,0 +1,5 @@
+{
+  "name": "CryptoStrategy Backtester",
+  "description": "A high-performance trading strategy backtesting dashboard with AI-driven insights and detailed performance analytics for BTCUSD and other crypto pairs.",
+  "requestFramePermissions": []
+}
