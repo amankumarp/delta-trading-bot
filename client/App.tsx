@@ -33,7 +33,7 @@ const App: React.FC = () => {
 
   // Backtest Parameters
   const [strategy, setStrategy] = useState(STRATEGY_OPTIONS[0].id);
-  const [symbol, setSymbol] = useState('BTCUSD');
+  const [symbol, setSymbol] = useState('BTC_USDT');
   const [interval, setIntervalVal] = useState('15m');
   const [startDateTime, setStartDateTime] = useState('2025-03-13T00:00');
   const [endDateTime, setEndDateTime] = useState('2025-07-19T23:59');
@@ -98,7 +98,68 @@ const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const stats = useMemo(() => data?.analysis || null, [data]);
+  const stats = useMemo(() => {
+    if (!data?.analysis) return null;
+
+    const raw = data.analysis;
+
+    // Transform sessions array: [{ "Session Name": { profit, count, winRate } }] -> { "Session Name": profit }
+    const sessionProfit: Record<string, number> = {};
+    const sessionWinRates: Record<string, number> = {};
+    raw.sessions?.forEach((s: any) => {
+      const [key, value] = Object.entries(s)[0] as [string, any];
+      sessionProfit[key] = value.profit;
+      sessionWinRates[key] = parseFloat(value.winRate);
+    });
+
+    // Transform volatility array: [{ "Volatility Name": { profit, count, winRate } }] -> { "Volatility Name": profit }
+    const volProfit: Record<string, number> = {};
+    const volWinRates: Record<string, number> = {};
+    raw.volatility?.forEach((v: any) => {
+      const [key, value] = Object.entries(v)[0] as [string, any];
+      volProfit[key] = value.profit;
+      volWinRates[key] = parseFloat(value.winRate);
+    });
+
+    // Transform positions array: [{ "buy/sell": { profit, count, winRate } }] -> { "buy/sell": profit }
+    const posProfit: Record<string, number> = {};
+    raw.positions?.forEach((p: any) => {
+      const [key, value] = Object.entries(p)[0] as [string, any];
+      posProfit[key] = value.profit;
+    });
+
+    // Transform daily object: { "DD-MM-YYYY": { profit, count } } -> { "YYYY-MM-DD": profit }
+    // As the heatmap expects "YYYY-MM-DD" for standard Date parsing if used, but "DD-MM-YYYY" is received, we'll format it.
+    // Heatmap code actually just looks by string match but Recharts tooltip likes good formats. Let's just output YYYY-MM-DD.
+    const dailyProfits: Record<string, number> = {};
+    const monthlyProfits: Record<string, number> = {};
+    const monthsNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    if (raw.daily) {
+      Object.entries(raw.daily).forEach(([dateStr, metrics]: [string, any]) => {
+        // Assume dateStr is "DD-MM-YYYY"
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+          const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+          dailyProfits[isoDate] = metrics.profit;
+
+          const monthName = `${monthsNames[parseInt(parts[1], 10) - 1]} ${parts[2]}`;
+          monthlyProfits[monthName] = (monthlyProfits[monthName] || 0) + metrics.profit;
+        }
+      });
+    }
+
+    return {
+      ...raw,
+      sessionProfit,
+      sessionWinRates,
+      volProfit,
+      volWinRates,
+      posProfit,
+      dailyProfits,
+      monthlyProfits,
+    };
+  }, [data]);
 
   const removeIndicator = (id: string) => {
     setIndicatorSettings(prev => ({
@@ -173,8 +234,8 @@ const App: React.FC = () => {
                     key={opt.id}
                     onClick={() => setStrategy(opt.id)}
                     className={`w-full text-left p-6 rounded-2xl border transition-all duration-300 relative group ${strategy === opt.id
-                        ? 'bg-emerald-500/10 border-emerald-500 shadow-2xl'
-                        : 'bg-white/5 border-white/10 hover:border-white/20'
+                      ? 'bg-emerald-500/10 border-emerald-500 shadow-2xl'
+                      : 'bg-white/5 border-white/10 hover:border-white/20'
                       }`}
                   >
                     <div className="flex items-center gap-4">
@@ -394,14 +455,19 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-5">
-              <StatCard label="Total Profit" value={`$${Math.abs(parseFloat(stats?.totalProfit || '0')).toFixed(2)}`} variant="green" icon={<DollarSign className="w-4 h-4" />} />
+            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-5">
+              <StatCard label="Final Balance" value={`$${Math.abs(parseFloat(stats?.finalBalance || '0')).toLocaleString()}`} variant="green" icon={<DollarSign className="w-4 h-4" />} />
+              <StatCard label="Net Profit" value={`$${parseFloat(stats?.totalProfit || '0').toLocaleString()}`} variant="teal" icon={<TrendingUp className="w-4 h-4" />} />
               <StatCard label="Win Rate" value={stats?.winRate || 0} suffix="%" variant="dark" icon={<Activity className="w-4 h-4" />} />
               <StatCard label="Profit Factor" value={stats?.profitFactor || 0} variant="purple" icon={<Scale className="w-4 h-4" />} />
-              <StatCard label="Max Drawdown" value={stats?.maxDrawdown || 0} suffix="%" variant="red" icon={<TrendingDown className="w-4 h-4" />} />
+              <StatCard label="Max Drawdown" value={stats?.maxDrawdownPercent || 0} suffix="%" variant="red" icon={<TrendingDown className="w-4 h-4" />} />
               <StatCard label="Total Trades" value={stats?.totalTrades || 0} variant="orange" icon={<Layers className="w-4 h-4" />} />
-              <StatCard label="Avg Profit/Trade" value={`$${Math.abs(parseFloat(stats?.avgProfit || '0')).toFixed(2)}`} variant="teal" icon={<Briefcase className="w-4 h-4" />} />
-              <StatCard label="Avg Risk/Trade" value={`$${Math.abs(parseFloat(stats?.avgRisk || '0')).toFixed(2)}`} variant="brown" icon={<ShieldCheck className="w-4 h-4" />} />
+
+              <StatCard label="CAGR" value={stats?.cagr || 0} suffix="%" variant="green" icon={<TrendingUp className="w-4 h-4" />} />
+              <StatCard label="Expectancy" value={`$${Math.abs(parseFloat(stats?.expectancy || '0')).toFixed(2)}`} variant="teal" icon={<Briefcase className="w-4 h-4" />} />
+              <StatCard label="Win/Loss Ratio" value={stats?.winLossRatio || 0} variant="dark" icon={<Activity className="w-4 h-4" />} />
+              <StatCard label="Kelly %" value={stats?.kelly || 0} suffix="%" variant="purple" icon={<Target className="w-4 h-4" />} />
+              <StatCard label="Recovery Factor" value={stats?.recoveryFactor || 0} variant="red" icon={<Activity className="w-4 h-4" />} />
               <StatCard label="Sharpe Ratio" value={stats?.sharpeRatio || 0} variant="pink" icon={<Gem className="w-4 h-4" />} />
             </div>
 

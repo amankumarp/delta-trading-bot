@@ -16,7 +16,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
   const mainChartRef = useRef<HTMLDivElement>(null);
   const rsiChartRef = useRef<HTMLDivElement>(null);
   const macdChartRef = useRef<HTMLDivElement>(null);
-  
+
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
 
   const chartInstances = useRef<{
@@ -39,8 +39,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
 
     // --- Main Chart Init ---
     const mainChart = createChart(mainChartRef.current, {
-      layout: { 
-        background: { type: ColorType.Solid, color: '#0f172a' }, 
+      layout: {
+        background: { type: ColorType.Solid, color: '#0f172a' },
         textColor: '#64748b',
         fontSize: 10,
         fontFamily: 'Inter'
@@ -57,6 +57,13 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
       upColor: '#10b981', downColor: '#f43f5e', borderVisible: false,
       wickUpColor: '#10b981', wickDownColor: '#f43f5e',
     });
+    // Configure price scale for candles to leave space for volume at the bottom
+    candleSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.1,
+        bottom: 0.2,
+      },
+    });
     seriesRef.current.candles = candleSeries;
 
     const prices = candles.map(c => c.close);
@@ -64,6 +71,28 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
       time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close,
     }));
     candleSeries.setData(formattedCandles);
+
+    // --- Add Volume Series ---
+    const volumeSeries = mainChart.addHistogramSeries({
+      color: '#26a69a',
+      priceFormat: {
+        type: 'volume',
+      },
+      priceScaleId: '', // render as an overlay
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.8, // leave space for candles
+        bottom: 0,
+      },
+    });
+    const volumeData = candles.map(c => ({
+      time: c.time as any,
+      value: c.volume,
+      color: c.close >= c.open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)',
+    }));
+    volumeSeries.setData(volumeData);
+    seriesRef.current.volume = volumeSeries;
 
     // --- Dynamic Indicators Rendering ---
     indicatorSettings.indicators.forEach((ind) => {
@@ -115,10 +144,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
         const hGram = chartInstances.current.macd.addHistogramSeries({ color: '#475569' });
         mLine.setData(macdLine.map((v, i) => ({ time: candles[i].time as any, value: v })));
         sLine.setData(signalLine.map((v, i) => ({ time: candles[i].time as any, value: v })));
-        hGram.setData(histogram.map((v, i) => ({ 
-          time: candles[i].time as any, 
-          value: v, 
-          color: v >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)' 
+        hGram.setData(histogram.map((v, i) => ({
+          time: candles[i].time as any,
+          value: v,
+          color: v >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)'
         })));
       }
     });
@@ -138,12 +167,24 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
         id: `trade-entry-${idx}`
       });
 
+      if (trade.partial_exit_time) {
+        const partialT = parseTime(trade.partial_exit_time);
+        markers.push({
+          time: partialT,
+          position: trade.isLong ? 'aboveBar' : 'belowBar',
+          color: parseFloat(trade.partial_profit || '0') >= 0 ? '#34d399' : '#f87171',
+          shape: 'diamond',
+          text: `TP1 ${trade.partial_profit}%`,
+          id: `trade-partial-${idx}`
+        });
+      }
+
       markers.push({
         time: exitT,
-        position: 'aboveBar',
+        position: trade.isLong ? 'aboveBar' : 'belowBar',
         color: parseFloat(trade.profit) >= 0 ? '#fbbf24' : '#64748b',
         shape: 'circle',
-        text: `EXIT`,
+        text: `EXIT ${trade.profit}%`,
         id: `trade-exit-${idx}`
       });
     });
@@ -165,7 +206,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
         targets.forEach(t => t.timeScale().setVisibleRange(range as any));
       });
     };
-    
+
     if (chartInstances.current.main) {
       const targets = [chartInstances.current.rsi, chartInstances.current.macd].filter(Boolean) as IChartApi[];
       sync(chartInstances.current.main, targets);
@@ -193,7 +234,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
   // Handle Track on Chart Logic
   useEffect(() => {
     if (!chartInstances.current.main || !seriesRef.current.candles) return;
-    
+
     if (focusedTradeId !== undefined && trades[focusedTradeId]) {
       const trade = trades[focusedTradeId];
       const entryTime = parseTime(trade.entry_time);
@@ -201,7 +242,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
 
       const duration = exitTime - entryTime;
       const padding = Math.max(duration * 2, 3600 * 4);
-      
+
       chartInstances.current.main.timeScale().setVisibleRange({
         from: (entryTime - padding / 2) as any,
         to: (exitTime + padding / 2) as any,
@@ -216,7 +257,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
       seriesRef.current.entryLine = seriesRef.current.candles.createPriceLine({
         price: trade.entry_price, color: '#10b981', lineWidth: 2, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: 'ENTRY'
       });
-      
+
       setSelectedTrade(trade);
     }
   }, [focusedTradeId, trades]);
@@ -224,50 +265,64 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
   return (
     <div className="flex flex-col gap-4 w-full bg-[#0f172a] rounded-[2.5rem] p-6 relative group overflow-hidden">
       <div className="absolute top-8 left-10 z-10 flex items-center gap-4 bg-slate-900/90 border border-slate-700/50 p-3 px-5 rounded-2xl backdrop-blur-xl shadow-2xl">
-         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-         <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Temporal Flow Visualizer v2.1</span>
+        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Temporal Flow Visualizer v2.1</span>
       </div>
 
       {selectedTrade && (
         <div className="absolute top-8 right-10 z-50 animate-in slide-in-from-right-10 duration-500">
-           <div className="bg-slate-900/95 border border-emerald-500/30 p-6 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl w-72 space-y-5">
-              <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                 <div className="flex items-center gap-2">
-                    <span className={`w-3 h-3 rounded-full ${selectedTrade.isLong ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                    <span className="text-[11px] font-black uppercase text-white tracking-widest">{selectedTrade.isLong ? 'LONG' : 'SHORT'}</span>
-                 </div>
-                 <button onClick={() => setSelectedTrade(null)} className="text-slate-500 hover:text-white transition-all"><X className="w-4 h-4" /></button>
+          <div className="bg-slate-900/95 border border-emerald-500/30 p-6 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl w-72 space-y-5">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div className="flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full ${selectedTrade.isLong ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                <span className="text-[11px] font-black uppercase text-white tracking-widest">{selectedTrade.isLong ? 'LONG' : 'SHORT'}</span>
               </div>
-              <div className="space-y-4">
-                 <div className="flex justify-between items-center">
-                    <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Entry</span>
-                    <span className="text-sm font-black text-white">${selectedTrade.entry_price.toLocaleString()}</span>
-                 </div>
-                 <div className="flex justify-between items-center">
-                    <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Exit</span>
-                    <span className="text-sm font-black text-white">${selectedTrade.exit_price.toLocaleString()}</span>
-                 </div>
-                 <div className="flex justify-between items-center">
-                    <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Clock className="w-3 h-3" /> Time</span>
-                    <span className="text-[10px] font-bold text-slate-300">{selectedTrade.entry_time.split(', ')[1]}</span>
-                 </div>
-                 <div className="flex justify-between items-center">
-                    <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Percent className="w-3 h-3" /> Yield</span>
-                    <span className={`text-lg font-black tracking-tighter ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {parseFloat(selectedTrade.profit) > 0 ? '+' : ''}{selectedTrade.profit}%
+              <button onClick={() => setSelectedTrade(null)} className="text-slate-500 hover:text-white transition-all"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Entry</span>
+                <span className="text-sm font-black text-white">${selectedTrade.entry_price.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Exit</span>
+                <span className="text-sm font-black text-white">${selectedTrade.exit_price.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Clock className="w-3 h-3" /> Time</span>
+                <span className="text-[10px] font-bold text-slate-300">{selectedTrade.entry_time.split(', ')[1]}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Percent className="w-3 h-3" /> Yield</span>
+                <span className={`text-lg font-black tracking-tighter ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {parseFloat(selectedTrade.profit) > 0 ? '+' : ''}{selectedTrade.profit}%
+                </span>
+              </div>
+
+              {selectedTrade.partial_exit_price && (
+                <div className="flex justify-between items-center pt-2 border-t border-white/5 pb-1">
+                  <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5">TP1 Booked</span>
+                  <div className="text-right">
+                    <span className="block text-xs font-black text-white px-2 py-0.5 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
+                      50% @ ${selectedTrade.partial_exit_price.toLocaleString()}
                     </span>
-                 </div>
-                 <div className="flex justify-between items-center pt-2 border-t border-white/5">
-                    <span className="text-[9px] font-black text-slate-500 uppercase">Analysis</span>
-                    <div className="flex items-center gap-1.5">
-                       {parseFloat(selectedTrade.profit) >= 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-rose-500" />}
-                       <span className={`text-[9px] font-black uppercase ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                         {parseFloat(selectedTrade.profit) >= 0 ? 'Win' : 'Loss'}
-                       </span>
-                    </div>
-                 </div>
+                    <span className="block text-[10px] text-emerald-400 font-bold mt-1">
+                      +{selectedTrade.partial_profit}%
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                <span className="text-[9px] font-black text-slate-500 uppercase">Analysis</span>
+                <div className="flex items-center gap-1.5">
+                  {parseFloat(selectedTrade.profit) >= 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-rose-500" />}
+                  <span className={`text-[9px] font-black uppercase ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {parseFloat(selectedTrade.profit) >= 0 ? 'Win' : 'Loss'}
+                  </span>
+                </div>
               </div>
-           </div>
+            </div>
+          </div>
         </div>
       )}
 

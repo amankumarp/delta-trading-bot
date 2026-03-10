@@ -4,7 +4,7 @@
  * @returns {string} - The formatted date string.
  */
 function formatTimestamp(timestamp) {
-    return new Date(timestamp).toLocaleString(undefined, {timeZone: 'Asia/Kolkata'});
+    return new Date(timestamp).toLocaleString(undefined, { timeZone: 'Asia/Kolkata' });
 }
 
 /**
@@ -33,7 +33,7 @@ function convertOHLCVtoArray(ohlcv) {
     const volume = ohlcv.map((candle) => candle.volume);
     const time = ohlcv.map((candle) => candle.time);
     return { high, low, close, open, volume, time };
-  }
+}
 
-  
-module.exports = { formatTimestamp , parseIntervalToSeconds, convertOHLCVtoArray};
+
+module.exports = { formatTimestamp, parseIntervalToSeconds, convertOHLCVtoArray };

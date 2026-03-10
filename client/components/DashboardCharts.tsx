@@ -55,29 +55,29 @@ export const MarketTrendEquityChart: React.FC<{ data: TrendDataPoint[] }> = ({ d
           <XAxis dataKey="label" stroke="#475569" fontSize={9} tickLine={false} axisLine={false} hide />
           <YAxis yAxisId="equity" stroke="#818cf8" fontSize={10} tickLine={false} axisLine={false} orientation="left" />
           <YAxis yAxisId="bg" hide domain={[0, 100]} />
-          
+
           <Tooltip content={<CustomTooltip />} />
-          
+
           {/* Background Areas */}
           <Bar yAxisId="bg" dataKey="isBull" fill="#10b981" fillOpacity={0.05} barSize={100} isAnimationActive={false} />
           <Bar yAxisId="bg" dataKey="isBear" fill="#f43f5e" fillOpacity={0.05} barSize={100} isAnimationActive={false} />
           <Bar yAxisId="bg" dataKey="isSide" fill="#64748b" fillOpacity={0.05} barSize={100} isAnimationActive={false} />
 
-          <Area 
+          <Area
             yAxisId="equity"
-            type="monotone" 
-            dataKey="equity" 
-            stroke="#818cf8" 
-            strokeWidth={3} 
-            fill="url(#equityGrad)" 
+            type="monotone"
+            dataKey="equity"
+            stroke="#818cf8"
+            strokeWidth={3}
+            fill="url(#equityGrad)"
             fillOpacity={0.1}
-            name="Cumulative Yield" 
-            unit="%" 
+            name="Cumulative Yield"
+            unit="%"
           />
           <defs>
             <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
             </linearGradient>
           </defs>
         </ComposedChart>
@@ -96,12 +96,12 @@ export const EquityCurveChart: React.FC<{ data: string[] }> = ({ data }) => {
         <AreaChart data={chartData}>
           <defs>
             <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-          <XAxis dataKey="trade" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tick={{dy: 10}} />
+          <XAxis dataKey="trade" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tick={{ dy: 10 }} />
           <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <Tooltip content={<CustomTooltip />} />
           <Area type="monotone" dataKey="profit" stroke="#10b981" fill="url(#equityGradient)" strokeWidth={3} name="Profit" unit="$" />
@@ -154,7 +154,7 @@ export const DayOfWeekAnalysis: React.FC<{ data: Record<string, any> }> = ({ dat
           <XAxis dataKey="name" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-          <Legend verticalAlign="bottom" height={36} iconType="rect" wrapperStyle={{fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold'}} />
+          <Legend verticalAlign="bottom" height={36} iconType="rect" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
           <Bar dataKey="profit" name="Profit" fill="#818cf8" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -174,7 +174,7 @@ export const ProfitBucketsChart: React.FC<{ data: Record<string, number> }> = ({
           <XAxis dataKey="name" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-          <Legend iconType="rect" wrapperStyle={{fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold'}} />
+          <Legend iconType="rect" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
           <Bar dataKey="value" name="Number of Trades" fill="#818cf8" radius={[4, 4, 0, 0]}>
             {chartData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.name === "4% Profit" ? "#d1d5db" : "#818cf8"} />
@@ -189,8 +189,8 @@ export const ProfitBucketsChart: React.FC<{ data: Record<string, number> }> = ({
 // --- Daily Profit Heatmap ---
 export const DailyProfitHeatmap: React.FC<{ data: Record<string, number> }> = ({ data }) => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
   const getColor = (val: number) => {
     if (val === 0) return '#1e293b';
     if (val > 2.0) return '#16a34a';
@@ -204,7 +204,7 @@ export const DailyProfitHeatmap: React.FC<{ data: Record<string, number> }> = ({
   const today = new Date();
   const weeksCount = 52;
   const weeks = [];
-  
+
   for (let i = 0; i < weeksCount; i++) {
     const week = [];
     for (let j = 0; j < 7; j++) {
@@ -233,11 +233,11 @@ export const DailyProfitHeatmap: React.FC<{ data: Record<string, number> }> = ({
                   {wi % 4 === 0 && months[week[0].month]}
                 </div>
                 {week.map((day, di) => (
-                  <div 
-                    key={di} 
+                  <div
+                    key={di}
                     title={`${day.date}: ${day.value.toFixed(2)}%`}
                     className="w-3.5 h-3.5 rounded-sm transition-all hover:scale-125 cursor-pointer"
-                    style={{ backgroundColor: getColor(day.value) }} 
+                    style={{ backgroundColor: getColor(day.value) }}
                   />
                 ))}
               </div>
@@ -258,8 +258,8 @@ export const DailyProfitHeatmap: React.FC<{ data: Record<string, number> }> = ({
         </div>
         <span>More Profit/Less Loss</span>
         <div className="ml-4 flex items-center gap-2">
-           <div className="w-3 h-3 rounded-sm bg-[#1e293b]"></div>
-           <span>No Trade Day</span>
+          <div className="w-3 h-3 rounded-sm bg-[#1e293b]"></div>
+          <span>No Trade Day</span>
         </div>
       </div>
     </div>
@@ -278,7 +278,7 @@ export const MonthlyYieldChart: React.FC<{ data: Record<string, number> }> = ({ 
           <XAxis dataKey="month" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-          <Legend iconType="rect" wrapperStyle={{fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold'}} />
+          <Legend iconType="rect" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
           <Bar dataKey="val" name="Monthly Profit" fill="#bef264" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -309,13 +309,12 @@ export const PerformanceBarChart: React.FC<{ title: string; data: Record<string,
   );
 };
 
-// --- Position Distribution ---
 export const PositionDistribution: React.FC<{ data: Record<string, number> }> = ({ data }) => {
-  const chartData = [
-    { name: 'buy', value: Math.abs(data.buy || 0) },
-    { name: 'sell', value: Math.abs(data.sell || 0) },
-  ];
-  const COLORS = ['#818cf8', '#6ee7b7'];
+  const chartData = Object.entries(data).map(([name, value]) => ({
+    name,
+    value: Math.abs(Number(value) || 0)
+  }));
+  const COLORS = ['#818cf8', '#6ee7b7', '#f43f5e', '#fbbf24'];
 
   return (
     <div className="bg-[#0f172a] border border-white/5 p-8 rounded-xl h-[450px] flex flex-col items-center">
@@ -337,7 +336,7 @@ export const PositionDistribution: React.FC<{ data: Record<string, number> }> = 
             ))}
           </Pie>
           <Tooltip content={<CustomTooltip />} />
-          <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold'}} />
+          <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
         </PieChart>
       </ResponsiveContainer>
     </div>

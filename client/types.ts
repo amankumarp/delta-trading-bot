@@ -21,6 +21,9 @@ export interface Trade {
   stoploss: number;
   rsi: number;
   atr: number;
+  partial_exit_time?: string;
+  partial_exit_price?: number;
+  partial_profit?: string;
   supertrend?: number;
   ema8?: number;
   ema13?: number;
@@ -61,29 +64,40 @@ export interface TrendDataPoint {
 }
 
 export interface Analysis {
+  initialBalance: number;
+  leverage: number;
+  fee: number;
+  riskPercentPerTrade: number;
   startTime: string;
   endTime: string;
   totalDays: number;
   totalTrades: number;
   winRate: string;
   totalProfit: string;
-  profitFactor: string;
-  maxDrawdown: string;
   avgProfit: string;
   avgRisk: string;
-  sharpeRatio: string;
+  grossProfit: string;
+  grossLoss: string;
+  profitFactor: string;
+  bestTrade: Trade;
+  worstTrade: Trade;
   maxWinStreak: number;
   maxLossStreak: number;
   avgRMultiple: string;
-  largestDrawdown: string;
-  avgDurationWins: string;
-  avgDurationLosses: string;
-  maxProfitDay: string;
-  maxLossDay: string;
-  maxProfitMonthly: string;
-  maxLossMonthly: string;
+  sharpeRatio: string;
+  sortinoRatio: string;
+  expectancy: string;
+  winLossRatio: string;
+  kelly: string;
+  totalFees: string;
   stoplossTouched: number;
   cumulativeProfit: string[];
+  maxDrawdown: string;
+  maxDrawdownPercent: string;
+  finalBalance: string;
+  totalReturn: string;
+  cagr: string;
+  calmarRatio: string;
   sessionProfit: Record<string, number>;
   sessionCounts: Record<string, number>;
   sessionWinRates: Record<string, string>;
@@ -93,14 +107,16 @@ export interface Analysis {
   posProfit: Record<string, number>;
   posCounts: Record<string, number>;
   posWinRates: Record<string, string>;
-  bestTrade: Trade;
-  worstTrade: Trade;
   hourStats: Record<string, HourStat>;
   profitBuckets: Record<string, number>;
   dayOfWeekAnalysis: Record<string, DayAnalysis>;
   dailyProfits: Record<string, number>;
   monthlyProfits: Record<string, number>;
   marketTrendData?: TrendDataPoint[];
+  avgDurationWins: string;
+  avgDurationLosses: string;
+  recoveryFactor: string;
+  largestDrawdown?: string;
 }
 
 export interface BacktestResponse {

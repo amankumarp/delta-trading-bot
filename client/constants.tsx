@@ -2,7 +2,7 @@
 import { BacktestResponse, Candle, Trade, Analysis, TrendDataPoint } from './types';
 
 export const INTERVAL_OPTIONS = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1mo'];
-export const ASSET_OPTIONS = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XAUUSD', 'EURUSD'];
+export const ASSET_OPTIONS = ['BTC_USDT', 'ETH_USDT', 'SOL_USDT', 'XAU_USDT', 'EUR_USD'];
 export const STRATEGY_OPTIONS = [
   { id: 'supertrend-ai', name: 'Supertrend AI', description: 'Advanced trend following with machine learning volatility filters.', icon: 'Zap' },
   { id: 'bb-ai', name: 'Bollinger AI', description: 'Mean reversion strategy leveraging Gaussian distribution and neural signals.', icon: 'Activity' }
@@ -21,10 +21,10 @@ const generateRichMockData = (): BacktestResponse => {
 
   for (let i = 0; i < count; i++) {
     // Generate organic-looking price movement with alternating "regimes"
-    const regime = Math.floor(i / 200); 
+    const regime = Math.floor(i / 200);
     let bias = 0;
     let trendType: 'Bullish' | 'Bearish' | 'Sideways' = 'Sideways';
-    
+
     if (regime === 0) { bias = 200; trendType = 'Bullish'; } // Bull
     else if (regime === 1) { bias = -150; trendType = 'Bearish'; } // Bear
     else if (regime === 2) { bias = 50; trendType = 'Sideways'; } // Sideways/Choppy
@@ -37,7 +37,7 @@ const generateRichMockData = (): BacktestResponse => {
     const high = Math.max(open, close) + Math.random() * 200;
     const low = Math.min(open, close) - Math.random() * 200;
     const time = startTime + i * interval;
-    
+
     candles.push({ time, open, high, low, close, volume: Math.random() * 50000 });
     price = close;
 
@@ -55,12 +55,12 @@ const generateRichMockData = (): BacktestResponse => {
 
       const entryTime = new Date(time * 1000).toLocaleString();
       const exitTime = new Date((time + interval * 2) * 1000).toLocaleString();
-      
+
       trades.push({
         entry_time: entryTime,
         entry_price: open,
         exit_time: exitTime,
-        exit_price: isLong ? open * (1 + profitVal/100) : open * (1 - profitVal/100),
+        exit_price: isLong ? open * (1 + profitVal / 100) : open * (1 - profitVal / 100),
         profit: profitVal.toFixed(2),
         risk_percentage: "0.50",
         isLong,
@@ -80,7 +80,7 @@ const generateRichMockData = (): BacktestResponse => {
     }
   }
 
-  const cumulativeProfit = trades.map((_, i) => 
+  const cumulativeProfit = trades.map((_, i) =>
     trades.slice(0, i + 1).reduce((acc, t) => acc + parseFloat(t.profit), 0).toFixed(2)
   );
 
@@ -97,39 +97,50 @@ const generateRichMockData = (): BacktestResponse => {
   });
 
   const hourStats: Record<string, any> = {};
-  for(let h=0; h<24; h++) hourStats[h] = { wins: 0, losses: 0, count: 0 };
+  for (let h = 0; h < 24; h++) hourStats[h] = { wins: 0, losses: 0, count: 0 };
   trades.forEach(t => {
     const h = new Date(t.entry_time).getHours();
     const isWin = parseFloat(t.profit) >= 0;
     hourStats[h].count++;
-    if(isWin) hourStats[h].wins++; else hourStats[h].losses++;
+    if (isWin) hourStats[h].wins++; else hourStats[h].losses++;
   });
 
   return {
     analysis: {
+      initialBalance: 1000000,
+      leverage: 50,
+      fee: 0.05,
+      riskPercentPerTrade: 1,
       startTime: new Date(startTime * 1000).toLocaleString(),
       endTime: new Date((startTime + count * interval) * 1000).toLocaleString(),
       totalDays: Math.floor(count * interval / 86400),
       totalTrades: trades.length,
       winRate: (trades.filter(t => parseFloat(t.profit) >= 0).length / trades.length * 100).toFixed(2),
       totalProfit: currentEquity.toFixed(2),
-      profitFactor: "2.12",
-      maxDrawdown: "-4.50",
       avgProfit: (currentEquity / trades.length).toFixed(2),
       avgRisk: "0.50",
-      sharpeRatio: "1.85",
+      grossProfit: "100.50",
+      grossLoss: "-50.25",
+      profitFactor: "2.12",
+      bestTrade: trades.sort((a, b) => parseFloat(b.profit) - parseFloat(a.profit))[0],
+      worstTrade: trades.sort((a, b) => parseFloat(a.profit) - parseFloat(b.profit))[0],
       maxWinStreak: 8,
       maxLossStreak: 4,
       avgRMultiple: "1.45",
-      largestDrawdown: "2.10",
-      avgDurationWins: "4.5",
-      avgDurationLosses: "2.1",
-      maxProfitDay: "5.20",
-      maxLossDay: "-2.30",
-      maxProfitMonthly: "12.40",
-      maxLossMonthly: "-1.50",
+      sharpeRatio: "1.85",
+      sortinoRatio: "2.10",
+      expectancy: "1.25",
+      winLossRatio: "1.8",
+      kelly: "0.25",
+      totalFees: "150.00",
       stoplossTouched: 12,
       cumulativeProfit,
+      maxDrawdown: "-4.50",
+      maxDrawdownPercent: "5.2",
+      finalBalance: "1012500",
+      totalReturn: "1.25",
+      cagr: "15.00",
+      calmarRatio: "2.1",
       sessionProfit: { "New York": 12.5, "London": 8.2, "Tokyo": 4.1, "Overlap": 15.3 },
       sessionCounts: { "New York": 150, "London": 120, "Tokyo": 80, "Overlap": 100 },
       sessionWinRates: { "New York": "55", "London": "48", "Tokyo": "60", "Overlap": "65" },
@@ -139,8 +150,6 @@ const generateRichMockData = (): BacktestResponse => {
       posProfit: { "buy": currentEquity * 0.6, "sell": currentEquity * 0.4 },
       posCounts: { "buy": Math.floor(trades.length * 0.6), "sell": Math.floor(trades.length * 0.4) },
       posWinRates: { "buy": "54", "sell": "52" },
-      bestTrade: trades.sort((a,b) => parseFloat(b.profit) - parseFloat(a.profit))[0],
-      worstTrade: trades.sort((a,b) => parseFloat(a.profit) - parseFloat(b.profit))[0],
       hourStats,
       marketTrendData,
       profitBuckets: { "Break Even": 120, "2% Profit": 80, "4% Profit": 40, "6% Profit": 10, "-2% Profit": 100 },
@@ -154,7 +163,11 @@ const generateRichMockData = (): BacktestResponse => {
         "Sunday": { profit: "2.4", winRate: "50", count: 60 }
       },
       dailyProfits,
-      monthlyProfits
+      monthlyProfits,
+      avgDurationWins: "4.5",
+      avgDurationLosses: "2.1",
+      recoveryFactor: "2.5",
+      largestDrawdown: "2.10"
     },
     trades,
     candles

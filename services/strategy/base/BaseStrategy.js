@@ -1,25 +1,28 @@
+const TradeManager = require('./TradeManager');
+
 class BaseStrategy {
   constructor() {
-    this.pendingTrade = null
+    this.pendingTrade = null;
+    this.tradeManager = new TradeManager();
   }
 
   prepareIndicators(data) {
-    throw new Error('prepareIndicators() not implemented')
+    throw new Error('prepareIndicators() not implemented');
   }
 
   onCandle(index, data) {
-    throw new Error('onCandle() not implemented')
+    throw new Error('onCandle() not implemented');
   }
 
   emitTrade(tradePayload) {
-    this.pendingTrade = tradePayload
+    this.pendingTrade = tradePayload;
   }
 
   consumeTrade() {
-    const t = this.pendingTrade
-    this.pendingTrade = null
-    return t
+    const t = this.pendingTrade;
+    this.pendingTrade = null;
+    return t;
   }
 }
 
-module.exports = BaseStrategy
+module.exports = BaseStrategy;
