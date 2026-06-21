@@ -129,7 +129,6 @@ function fetchRawCandles(symbol, interval, from, to) {
 
 
 async function getCandles({ symbol, interval, from, to, type = 'normal' }) {
-  console.log(`Fetching candles for ${symbol} at ${interval} from ${from} to ${to}`);
   const raw = await fetchRawCandles(symbol, interval, from, to);
 
   const grouped = groupCandles(raw, intervalsIn[interval]);
