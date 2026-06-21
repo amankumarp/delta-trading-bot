@@ -13,6 +13,7 @@ class SupertrendAI extends BaseStrategy {
         this.usePercentBaseSl = true; // Use percentage based stoploss
         this.riskPercent = 0.85; // 0.85% risk per trade
         this.partialExitThreshold = 2; // 50% profit for partial exit
+        this.slBufferMultiplier = 0.2; // Multiplier for sl buffer
         this.useHeikinAshiForSignal = false;
         this.ema8 = [];
         this.ema13 = [];
@@ -79,8 +80,8 @@ class SupertrendAI extends BaseStrategy {
             const isCrossDown = crossDown(close, this.supertrend);
             const emaCrossUp = crossUp(this.ema8, this.ema13);
             const emaCrossDown = crossDown(this.ema8, this.ema13);
-            // Initial stoploss using High/Low of entry candle + buffer (0.2 * ATR for example)
-            const slBuffer = this.atr[i] * 0.2; // Adjust buffer multiplier as needed
+            // Initial stoploss using High/Low of entry candle + buffer (slBufferMultiplier * ATR)
+            const slBuffer = this.atr[i] * this.slBufferMultiplier;
             let stoploss = isCrossUp[i] ? low[i] - slBuffer : high[i] + slBuffer;
 
             // Optional: fallback to Supertrend if it's closer

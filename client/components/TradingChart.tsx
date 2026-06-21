@@ -27,8 +27,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
 
   const seriesRef = useRef<any>({});
 
-  const parseTime = (dateStr: string) => {
+  const parseTime = (dateStr?: string) => {
+    if (!dateStr) return Date.now() / 1000;
     const [datePart, timePart] = dateStr.split(', ');
+    if (!datePart || !timePart) return Date.now() / 1000;
     const [day, month, year] = datePart.split('/').map(Number);
     const [hour, min, sec] = timePart.split(':').map(Number);
     return new Date(year, month - 1, day, hour, min, sec).getTime() / 1000;
@@ -182,9 +184,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
       markers.push({
         time: exitT,
         position: trade.isLong ? 'aboveBar' : 'belowBar',
-        color: parseFloat(trade.profit) >= 0 ? '#fbbf24' : '#64748b',
+        color: parseFloat(trade.profit || '0') >= 0 ? '#fbbf24' : '#64748b',
         shape: 'circle',
-        text: `EXIT ${trade.profit}%`,
+        text: `EXIT ${trade.profit || '0'}%`,
         id: `trade-exit-${idx}`
       });
     });
@@ -301,8 +303,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
               <div className="flex justify-between items-center">
                 <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Percent className="w-3 h-3" /> Yield</span>
                 <div className="text-right">
-                  <span className={`block text-lg font-black tracking-tighter ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {parseFloat(selectedTrade.profit) >= 0 ? '+' : ''}{selectedTrade.profit}%
+                  <span className={`block text-lg font-black tracking-tighter ${parseFloat(selectedTrade.profit || '0') >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {parseFloat(selectedTrade.profit || '0') >= 0 ? '+' : ''}{selectedTrade.profit || '0'}%
                   </span>
                   {selectedTrade.pnl !== undefined && (
                     <span className={`block text-[10px] font-bold mt-0.5 ${selectedTrade.pnl >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
