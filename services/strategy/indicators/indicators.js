@@ -80,29 +80,89 @@ function calculateATR(highs, lows, closes, period) {
 }
 
 /**
- * 📌 Calculate Average Directional Index (ADX)
+ * 📌 Calculate Average Directional Index (ADX) with +DI and -DI
+ * Uses Wilder's smoothing (RMA) for proper directional movement calculation.
  * @param {number[]} highs - Array of high prices
  * @param {number[]} lows - Array of low prices
  * @param {number[]} closes - Array of close prices
- * @param {number} period - ADX period
- * @returns {number[]} - ADX values
+ * @param {number} period - ADX period (default 14)
+ * @returns {{ adx: number[], plusDI: number[], minusDI: number[] }}
  */
-function calculateADX(highs, lows, closes, period) {
-    let plusDM = [];
-    let minusDM = [];
-    let tr = [];
+function calculateADX(highs, lows, closes, period = 14) {
+    const len = highs.length;
+    const adx = new Array(len).fill(null);
+    const plusDI = new Array(len).fill(null);
+    const minusDI = new Array(len).fill(null);
 
-    for (let i = 1; i < highs.length; i++) {
-        plusDM.push(highs[i] > highs[i - 1] ? highs[i] - highs[i - 1] : 0);
-        minusDM.push(lows[i - 1] > lows[i] ? lows[i - 1] - lows[i] : 0);
-        tr.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
+    if (len < period + 1) return { adx, plusDI, minusDI };
+
+    // Step 1: Calculate raw +DM, -DM, and TR for each bar
+    const rawPlusDM = new Array(len).fill(0);
+    const rawMinusDM = new Array(len).fill(0);
+    const rawTR = new Array(len).fill(0);
+
+    for (let i = 1; i < len; i++) {
+        const upMove = highs[i] - highs[i - 1];
+        const downMove = lows[i - 1] - lows[i];
+        rawPlusDM[i] = (upMove > downMove && upMove > 0) ? upMove : 0;
+        rawMinusDM[i] = (downMove > upMove && downMove > 0) ? downMove : 0;
+        rawTR[i] = Math.max(
+            highs[i] - lows[i],
+            Math.abs(highs[i] - closes[i - 1]),
+            Math.abs(lows[i] - closes[i - 1])
+        );
     }
 
-    let plusDI = calculateSMA(plusDM, period).map((val, i) => (val / calculateSMA(tr, period)[i]) * 100);
-    let minusDI = calculateSMA(minusDM, period).map((val, i) => (val / calculateSMA(tr, period)[i]) * 100);
-    let dx = plusDI.map((val, i) => Math.abs((val - minusDI[i]) / (val + minusDI[i])) * 100);
+    // Step 2: Initial smoothed sums over the first `period` bars (Wilder's method)
+    let smoothPlusDM = 0;
+    let smoothMinusDM = 0;
+    let smoothTR = 0;
+    for (let i = 1; i <= period; i++) {
+        smoothPlusDM += rawPlusDM[i];
+        smoothMinusDM += rawMinusDM[i];
+        smoothTR += rawTR[i];
+    }
+
+    // Step 3: Calculate +DI, -DI from bar `period` onward using Wilder's smoothing
+    const calcDI = (smoothDM, smoothTR) => smoothTR === 0 ? 0 : (smoothDM / smoothTR) * 100;
     
-    return calculateSMA(dx, period);
+    plusDI[period] = calcDI(smoothPlusDM, smoothTR);
+    minusDI[period] = calcDI(smoothMinusDM, smoothTR);
+
+    let dxSum = 0;
+    const dxArr = new Array(len).fill(null);
+    const sumDI = plusDI[period] + minusDI[period];
+    dxArr[period] = sumDI === 0 ? 0 : (Math.abs(plusDI[period] - minusDI[period]) / sumDI) * 100;
+    dxSum += dxArr[period];
+
+    for (let i = period + 1; i < len; i++) {
+        // Wilder's smoothing: prev - (prev / period) + current
+        smoothPlusDM = smoothPlusDM - (smoothPlusDM / period) + rawPlusDM[i];
+        smoothMinusDM = smoothMinusDM - (smoothMinusDM / period) + rawMinusDM[i];
+        smoothTR = smoothTR - (smoothTR / period) + rawTR[i];
+
+        plusDI[i] = calcDI(smoothPlusDM, smoothTR);
+        minusDI[i] = calcDI(smoothMinusDM, smoothTR);
+
+        const di_sum = plusDI[i] + minusDI[i];
+        dxArr[i] = di_sum === 0 ? 0 : (Math.abs(plusDI[i] - minusDI[i]) / di_sum) * 100;
+
+        if (i < period * 2) {
+            dxSum += dxArr[i];
+        }
+    }
+
+    // Step 4: First ADX is the SMA of the first `period` DX values
+    if (len > period * 2) {
+        adx[period * 2 - 1] = dxSum / period;
+
+        // Subsequent ADX values use Wilder's smoothing
+        for (let i = period * 2; i < len; i++) {
+            adx[i] = ((adx[i - 1] * (period - 1)) + dxArr[i]) / period;
+        }
+    }
+
+    return { adx, plusDI, minusDI };
 }
 
 /**

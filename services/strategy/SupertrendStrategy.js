@@ -14,6 +14,8 @@ class SupertrendAI extends BaseStrategy {
         this.riskPercent = 0.85; // 0.85% risk per trade
         this.partialExitThreshold = 2; // 50% profit for partial exit
         this.slBufferMultiplier = 0.2; // Multiplier for sl buffer
+        this.adxPeriod = 14; // ADX lookback period
+        this.adxThreshold = 20; // Minimum ADX to confirm trending market
         this.useHeikinAshiForSignal = false;
         this.ema8 = [];
         this.ema13 = [];
@@ -21,6 +23,8 @@ class SupertrendAI extends BaseStrategy {
         this.sma13 = [];
         this.atr = [];
         this.adx = [];
+        this.plusDI = [];
+        this.minusDI = [];
         this.supertrend = [];
         this.rsi = [];
         this.macd = [];
@@ -43,7 +47,10 @@ class SupertrendAI extends BaseStrategy {
             this.ema13 = calculateEMA(haClose, 13);
             this.sma13 = calculateSMA(haClose, 13); // SMA can be approximated with EMA
             this.rsi = calculateRSI(haClose, 14);
-            // this.adx = calculateADX(haHigh, haLow, haClose, 14);
+            const adxResult = calculateADX(haHigh, haLow, haClose, this.adxPeriod);
+            this.adx = adxResult.adx;
+            this.plusDI = adxResult.plusDI;
+            this.minusDI = adxResult.minusDI;
             this.sessions = calculateSessions(time);
             this.volatilityMillionMoves = calculateVolatility(haHigh, haLow, haClose);
 
@@ -57,7 +64,10 @@ class SupertrendAI extends BaseStrategy {
             this.ema13 = calculateEMA(close, 13);
             this.sma13 = calculateSMA(close, 13); // SMA can be approximated with EMA       
             this.rsi = calculateRSI(close, 14);
-            // this.adx = calculateADX(high, low, close, 14);
+            const adxResult = calculateADX(high, low, close, this.adxPeriod);
+            this.adx = adxResult.adx;
+            this.plusDI = adxResult.plusDI;
+            this.minusDI = adxResult.minusDI;
             this.sessions = calculateSessions(time);
             this.volatilityMillionMoves = calculateVolatility(high, low, close);
 
@@ -87,10 +97,18 @@ class SupertrendAI extends BaseStrategy {
 
             const riskAnalysis = (Math.abs(close[i] - stoploss) / close[i]) * 100; // Calculate risk as actual % movement
 
-            let commonCondition = riskAnalysis <= this.riskPercent;
+            // ADX / Directional Movement filter
+            const adxVal = this.adx[i] ?? 0;
+            const pdi = this.plusDI[i] ?? 0;
+            const mdi = this.minusDI[i] ?? 0;
+            const isTrending = adxVal >= this.adxThreshold; // ADX > 20 = trending market
+            const bullishDI = pdi > mdi; // +DI > -DI = buyers in control
+            const bearishDI = mdi > pdi; // -DI > +DI = sellers in control
 
-            const Cbull = isCrossUp && close[i] >= this.sma13[i] && commonCondition; 
-            const Cbear = isCrossDown && close[i] <= this.sma13[i] && commonCondition;  
+            let commonCondition = riskAnalysis <= this.riskPercent && isTrending;
+
+            const Cbull = isCrossUp && close[i] >= this.sma13[i] && commonCondition && bullishDI; 
+            const Cbear = isCrossDown && close[i] <= this.sma13[i] && commonCondition && bearishDI;  
             const bull = Cbull && !(close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
             const bear = Cbear && !(close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
             const Sbull = Cbull && (close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
@@ -205,7 +223,9 @@ class SupertrendAI extends BaseStrategy {
                 ema8: this.ema8[i],
                 ema13: this.ema13[i],
                 rsi: this.rsi[i],
-                adx: 0,
+                adx: adxVal,
+                plusDI: pdi,
+                minusDI: mdi,
                 volatility: this.volatilityMillionMoves[i].volatilityStatus,
                 isCandleRanging: candleRange.isSideways,
                 highest: candleRange.highest,
