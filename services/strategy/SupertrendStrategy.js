@@ -33,7 +33,6 @@ class SupertrendAI extends BaseStrategy {
     generateSignals(data) {
         const { open, high, low, close, time, volume } = data;
 
-
         // Calculate indicators
         if (this.useHeikinAshiForSignal) {
             const ohlcv = { open, high, low, close, time, volume };
@@ -66,9 +65,12 @@ class SupertrendAI extends BaseStrategy {
             const { supertrend } = calculateSupertrend(high, low, close, this.atrLength, this.multiplier);
             this.supertrend = supertrend;
         }
-        // Calculate MACD
 
-        // Generate buy/sell signals based on co
+        // Pre-calculate crosses to prevent O(N^2) evaluation inside the main loop
+        const isCrossUpArr = crossUp(close, this.supertrend);
+        const isCrossDownArr = crossDown(close, this.supertrend);
+
+        // Generate buy/sell signals
         const candles = [];
         const signals = [];
         let startIndex = 16;
@@ -76,30 +78,23 @@ class SupertrendAI extends BaseStrategy {
             const h1_candles = calculateHFTCandles({ open: open.slice(i - startIndex, i - 1), high: high.slice(i - startIndex, i - 1), low: low.slice(i - startIndex, i - 1), close: close.slice(i - startIndex, i - 1), timestamp: time.slice(i - startIndex, i - 1), volume: volume.slice(i - startIndex, i - 1) }, 15, 60, 0);
             const candleRange = isCandleRanging({ close: h1_candles.close, high: h1_candles.high, low: h1_candles.low, open: h1_candles.open });
 
-            const isCrossUp = crossUp(close, this.supertrend);
-            const isCrossDown = crossDown(close, this.supertrend);
-            const emaCrossUp = crossUp(this.ema8, this.ema13);
-            const emaCrossDown = crossDown(this.ema8, this.ema13);
+            const isCrossUp = isCrossUpArr[i];
+            const isCrossDown = isCrossDownArr[i];
+            
             // Initial stoploss using High/Low of entry candle + buffer (slBufferMultiplier * ATR)
             const slBuffer = this.atr[i] * this.slBufferMultiplier;
-            let stoploss = isCrossUp[i] ? low[i] - slBuffer : high[i] + slBuffer;
-
-            // Optional: fallback to Supertrend if it's closer
-            // stoploss = isCrossUp[i] ? stoploss > this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss : stoploss < this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss;
+            let stoploss = isCrossUp ? low[i] - slBuffer : high[i] + slBuffer;
 
             const riskAnalysis = (Math.abs(close[i] - stoploss) / close[i]) * 100; // Calculate risk as actual % movement
-            //this.sessions[i] != "Tokyo Session" &&
 
+            let commonCondition = riskAnalysis <= this.riskPercent;
 
-            let commonCondition = riskAnalysis <= this.riskPercent;//&& new Date(time[i]*1000).getDay() !== 6//&& this.rsi[i] >= 50  && 
-
-            const Cbull = isCrossUp[i] && close[i] >= this.sma13[i] && commonCondition; //&& this.volatility.priceJurikArr[i] > 300 && candleRange.highest <= close[i] && this.sessions[i] != "Tokyo Session";
-            const Cbear = isCrossDown[i] && close[i] <= this.sma13[i] && commonCondition;  //&& this.volatility.priceJurikArr[i] < -300//&& candleRange.lowest >= close[i] && this.sessions[i] != "Tokyo Session";
+            const Cbull = isCrossUp && close[i] >= this.sma13[i] && commonCondition; 
+            const Cbear = isCrossDown && close[i] <= this.sma13[i] && commonCondition;  
             const bull = Cbull && !(close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
             const bear = Cbear && !(close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
             const Sbull = Cbull && (close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
             const Sbear = Cbear && !(close[i - 1] > this.ema200[i] && close[i] > this.ema200[i])
-
 
             // Check active position events
             const candleData = { time: time[i], open: open[i], high: high[i], low: low[i], close: close[i] };
@@ -114,8 +109,8 @@ class SupertrendAI extends BaseStrategy {
                 profitPct = calculateProfitPercentage(pos.isLong, pos.entry_price, close[i]);
 
                 // Manual full exit condition overlaying TP/SL
-                const fullExitBull = isCrossDown[i] && pos.isLong;
-                const fullExitBear = isCrossUp[i] && !pos.isLong;
+                const fullExitBull = isCrossDown && pos.isLong;
+                const fullExitBear = isCrossUp && !pos.isLong;
 
                 if (fullExitBull || fullExitBear) {
                     const exitEvent = this.tradeManager.closePosition(time[i], close[i], 'exit_signal', candleData);
@@ -123,7 +118,7 @@ class SupertrendAI extends BaseStrategy {
                 } else if (pos.tps && pos.tps.length > 1 && pos.tps[1].hit && pos.quantity > 0) {
                     // TP2 hit -> initiate dynamic trailing for the remaining quantity
                     const isHighVolatility = this.volatilityMillionMoves[i].volatilityStatus === 'High Volatility';
-                    const trailMultiplier = isHighVolatility ? 2.5 : 1.0; // Aggressive trailing (1.0x ATR) in low vol or trending market, Loose trailing (2.5x ATR) in high vol
+                    const trailMultiplier = isHighVolatility ? 2.5 : 1.0; 
 
                     const dynamicTrailSl = pos.isLong
                         ? close[i] - (this.atr[i] * trailMultiplier)
@@ -189,7 +184,7 @@ class SupertrendAI extends BaseStrategy {
                         datetime: formatTimestamp(time[i]),
                         stoploss: stoploss,
                         ...signal,
-                        active: entryEvent // some consumers expect active context
+                        active: entryEvent 
                     };
                     signals.push(newSignal);
                 }
@@ -227,7 +222,6 @@ class SupertrendAI extends BaseStrategy {
 
             candles.push(candle);
         }
-        // return {}
         return { signals, candles };
     }
 }
