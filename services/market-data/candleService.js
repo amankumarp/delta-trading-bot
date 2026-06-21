@@ -70,7 +70,7 @@ function groupCandles(candles, intervalSec) {
 
 function fetchRawCandles(symbol, interval, from, to) {
   return new Promise((resolve, reject) => {
-    const table = `${symbol}_1m`;
+    const table = `${symbol.toLowerCase()}_1m`;
     const intervalSec = intervalsIn[interval];
 
     if (!intervalSec) return reject(new Error("Invalid interval"));
@@ -88,7 +88,7 @@ function fetchRawCandles(symbol, interval, from, to) {
         else resolve(rows.reverse());
       });
 
-    // Case: Only 'from' is provided
+      // Case: Only 'from' is provided
     } else if (from && !to) {
       const query = `
         SELECT * FROM ${table}
@@ -100,7 +100,7 @@ function fetchRawCandles(symbol, interval, from, to) {
         else resolve(rows);
       });
 
-    // Case: Only 'to' is provided
+      // Case: Only 'to' is provided
     } else if (!from && to) {
       const query = `
         SELECT * FROM ${table}
@@ -112,7 +112,7 @@ function fetchRawCandles(symbol, interval, from, to) {
         else resolve(rows);
       });
 
-    // Case: Both 'from' and 'to' are provided
+      // Case: Both 'from' and 'to' are provided
     } else {
       const query = `
         SELECT * FROM ${table}
@@ -133,7 +133,7 @@ async function getCandles({ symbol, interval, from, to, type = 'normal' }) {
   const raw = await fetchRawCandles(symbol, interval, from, to);
 
   const grouped = groupCandles(raw, intervalsIn[interval]);
-  
+
   const result = type === 'heikin_ashi' ? heikinAshiTransform(grouped) : grouped;
 
   return result;

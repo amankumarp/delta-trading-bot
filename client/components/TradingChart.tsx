@@ -101,7 +101,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
       if (ind.type === 'EMA') {
         const period = ind.params.period || 20;
         const emaData = calculateEMA(prices, period).map((v, i) => ({ time: candles[i].time as any, value: v }));
-        const emaSeries = mainChart.addLineSeries({ color: ind.color, lineWidth: 1.5, title: `EMA ${period}` });
+        const emaSeries = mainChart.addLineSeries({ color: ind.color, lineWidth: 2, title: `EMA ${period}` });
         emaSeries.setData(emaData);
       } else if (ind.type === 'BB') {
         const period = ind.params.period || 20;
@@ -125,7 +125,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
           rsi70.setData(candles.map(c => ({ time: c.time as any, value: 70 })));
           rsi30.setData(candles.map(c => ({ time: c.time as any, value: 30 })));
         }
-        const rsiSeries = chartInstances.current.rsi.addLineSeries({ color: ind.color, lineWidth: 1.5, title: `RSI ${ind.params.period}` });
+        const rsiSeries = chartInstances.current.rsi.addLineSeries({ color: ind.color, lineWidth: 2, title: `RSI ${ind.params.period}` });
         const rsiVal = calculateRSI(prices, ind.params.period || 14);
         rsiSeries.setData(rsiVal.map((v, i) => ({ time: candles[i].time as any, value: v })).filter(d => d.value !== null));
       } else if (ind.type === 'MACD' && macdChartRef.current) {
@@ -139,7 +139,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
           chartInstances.current.macd = macdChart;
         }
         const { macdLine, signalLine, histogram } = calculateMACD(prices, ind.params.fast || 12, ind.params.slow || 26, ind.params.signal || 9);
-        const mLine = chartInstances.current.macd.addLineSeries({ color: ind.color, lineWidth: 1.5 });
+        const mLine = chartInstances.current.macd.addLineSeries({ color: ind.color, lineWidth: 2 });
         const sLine = chartInstances.current.macd.addLineSeries({ color: '#f59e0b', lineWidth: 1 });
         const hGram = chartInstances.current.macd.addHistogramSeries({ color: '#475569' });
         mLine.setData(macdLine.map((v, i) => ({ time: candles[i].time as any, value: v })));
@@ -192,8 +192,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
 
     // Marker Click Tooltip Logic
     mainChart.subscribeClick((param: MouseEventParams) => {
-      if (param.hoveredMarkerId) {
-        const tradeIdx = parseInt(String(param.hoveredMarkerId).split('-').pop() || '0');
+      if (param.hoveredObjectId) {
+        const tradeIdx = parseInt(String(param.hoveredObjectId).split('-').pop() || '0');
         setSelectedTrade(trades[tradeIdx]);
       } else {
         setSelectedTrade(null);
@@ -280,46 +280,67 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
               <button onClick={() => setSelectedTrade(null)} className="text-slate-500 hover:text-white transition-all"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Entry</span>
-                <span className="text-sm font-black text-white">${selectedTrade.entry_price.toLocaleString()}</span>
+              <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-3">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3 text-emerald-500/50" /> Entry</span>
+                  <span className="block text-sm font-black text-white">${selectedTrade.entry_price.toLocaleString()}</span>
+                  <span className="block text-[8px] font-bold text-slate-500">{selectedTrade.entry_time}</span>
+                </div>
+                <div className="space-y-1 text-right">
+                  <span className="text-[9px] font-black text-slate-500 uppercase flex items-center justify-end gap-1.5"><DollarSign className="w-3 h-3 text-rose-500/50" /> Exit</span>
+                  <span className="block text-sm font-black text-white">${selectedTrade.exit_price.toLocaleString()}</span>
+                  <span className="block text-[8px] font-bold text-slate-500">{selectedTrade.exit_time}</span>
+                </div>
               </div>
+
               <div className="flex justify-between items-center">
-                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Exit</span>
-                <span className="text-sm font-black text-white">${selectedTrade.exit_price.toLocaleString()}</span>
+                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Info className="w-3 h-3" /> Quantity</span>
+                <span className="text-xs font-black text-white">{selectedTrade.qnt ? selectedTrade.qnt.toFixed(4) : '-'}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Clock className="w-3 h-3" /> Time</span>
-                <span className="text-[10px] font-bold text-slate-300">{selectedTrade.entry_time.split(', ')[1]}</span>
-              </div>
+
               <div className="flex justify-between items-center">
                 <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Percent className="w-3 h-3" /> Yield</span>
-                <span className={`text-lg font-black tracking-tighter ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {parseFloat(selectedTrade.profit) > 0 ? '+' : ''}{selectedTrade.profit}%
-                </span>
+                <div className="text-right">
+                  <span className={`block text-lg font-black tracking-tighter ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {parseFloat(selectedTrade.profit) >= 0 ? '+' : ''}{selectedTrade.profit}%
+                  </span>
+                  {selectedTrade.pnl !== undefined && (
+                    <span className={`block text-[10px] font-bold mt-0.5 ${selectedTrade.pnl >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
+                      {selectedTrade.pnl >= 0 ? '+$' : '-$'}{Math.abs(selectedTrade.pnl).toFixed(2)} PNL
+                    </span>
+                  )}
+                </div>
               </div>
 
               {selectedTrade.partial_exit_price && (
                 <div className="flex justify-between items-center pt-2 border-t border-white/5 pb-1">
-                  <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5">TP1 Booked</span>
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5">TP1 Booked</span>
+                    <span className="block text-[8px] font-bold text-slate-500 max-w-[100px] truncate">{selectedTrade.partial_exit_time}</span>
+                  </div>
                   <div className="text-right">
                     <span className="block text-xs font-black text-white px-2 py-0.5 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
-                      50% @ ${selectedTrade.partial_exit_price.toLocaleString()}
+                      {selectedTrade.partial_exit_qnt ? selectedTrade.partial_exit_qnt.toFixed(4) : '50%'} @ ${selectedTrade.partial_exit_price.toLocaleString()}
                     </span>
-                    <span className="block text-[10px] text-emerald-400 font-bold mt-1">
-                      +{selectedTrade.partial_profit}%
-                    </span>
+                    <div className="flex justify-end gap-1.5 items-center mt-1">
+                      <span className="block text-[10px] text-emerald-400 font-bold">
+                        +{selectedTrade.partial_profit}%
+                      </span>
+                      {selectedTrade.partial_pnl !== undefined && (
+                        <span className="text-[9px] font-bold text-emerald-500/70">
+                          (+${selectedTrade.partial_pnl.toFixed(2)})
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
+
               <div className="flex justify-between items-center pt-2 border-t border-white/5">
-                <span className="text-[9px] font-black text-slate-500 uppercase">Analysis</span>
-                <div className="flex items-center gap-1.5">
-                  {parseFloat(selectedTrade.profit) >= 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-rose-500" />}
-                  <span className={`text-[9px] font-black uppercase ${parseFloat(selectedTrade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {parseFloat(selectedTrade.profit) >= 0 ? 'Win' : 'Loss'}
-                  </span>
-                </div>
+                <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Clock className="w-3 h-3" /> Duration</span>
+                <span className="text-[9px] font-black text-slate-400">
+                  {Math.round((parseTime(selectedTrade.exit_time || selectedTrade.entry_time) - parseTime(selectedTrade.entry_time)) / 60)} mins
+                </span>
               </div>
             </div>
           </div>

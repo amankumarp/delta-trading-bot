@@ -13,7 +13,7 @@ class TelegramService {
             const response = await axios.post(this.apiUrl, {
                 chat_id: this.chatId,
                 text: message,
-                parse_mode:"markdown"
+                parse_mode: "markdown"
             });
             console.log('Notification sent:', response.data);
         } catch (error) {
@@ -23,7 +23,7 @@ class TelegramService {
 
     // Function for trailing stop notification
     async getTrailingStopMessage(asset, newStopLoss, reason) {
-        let message=`
+        let message = `
 🔄 *Trailing Stop Update!* 🔄
 💰 *Asset*: ${asset}
 📉 *New Stop Loss*: $${newStopLoss}
@@ -69,12 +69,12 @@ class TelegramService {
 
 😔 Tough luck this time, but we’ll bounce back stronger! 💪
                 `;
-        this.sendNotification(Number(profit)>0?profitMessage:lossMessage);
+        this.sendNotification(Number(profit) > 0 ? profitMessage : lossMessage);
     }
 
     // Function for trade signal notification
     async getTradeSignalMessage(signal, asset, entryPrice, target, stopLoss) {
-        let message =`
+        let message = `
 🚀 *Trade Alert!* 🚀
 📈 *Signal*: ${signal}
 💰 *Asset*: ${asset}
@@ -84,11 +84,28 @@ class TelegramService {
 
 🔥 Let's ride the wave! 🌊
         `;
-
-        
         this.sendNotification(message);
     }
 
+    // Function for market alerts (Patterns/Indicators)
+    async getMarketAlertMessage(asset, timeframe, alerts) {
+        if (!alerts || alerts.length === 0) return;
+
+        const alertList = alerts.map(a => `- ${a.message}`).join('\n');
+
+        let message = `
+🚨 *Market Alert* 🚨
+💰 *Asset*: ${asset}
+⏱️ *Timeframe*: ${timeframe}
+
+🔍 *Detections*:
+${alertList}
+
+Stay analytical! 📊
+        `;
+
+        this.sendNotification(message);
+    }
 }
 
 

@@ -79,11 +79,14 @@ class SupertrendAI extends BaseStrategy {
             const isCrossDown = crossDown(close, this.supertrend);
             const emaCrossUp = crossUp(this.ema8, this.ema13);
             const emaCrossDown = crossDown(this.ema8, this.ema13);
-            // let stoploss = isCrossUp[i]?candleRange.lowest: candleRange.highest; // Default stoploss based on candle range
-            let stoploss = isCrossUp[i] ? high[i] - (this.atr[i] * this.atrMultiplier) : low[i] + (this.atr[i] * this.atrMultiplier);
-            stoploss = isCrossUp[i] ? stoploss > low[i] ? stoploss = low[i] : stoploss : stoploss < high[i] ? stoploss = high[i] : stoploss;
-            stoploss = isCrossUp[i] ? stoploss > this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss : stoploss < this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss;
-            const riskAnalysis = (Math.abs(close[i] - stoploss) / stoploss) * 100; // Calculate risk as percentage of supertrend
+            // Initial stoploss using High/Low of entry candle + buffer (0.2 * ATR for example)
+            const slBuffer = this.atr[i] * 0.2; // Adjust buffer multiplier as needed
+            let stoploss = isCrossUp[i] ? low[i] - slBuffer : high[i] + slBuffer;
+
+            // Optional: fallback to Supertrend if it's closer
+            // stoploss = isCrossUp[i] ? stoploss > this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss : stoploss < this.supertrend[i] ? stoploss = this.supertrend[i] : stoploss;
+
+            const riskAnalysis = (Math.abs(close[i] - stoploss) / close[i]) * 100; // Calculate risk as actual % movement
             //this.sessions[i] != "Tokyo Session" &&
 
 
@@ -116,6 +119,21 @@ class SupertrendAI extends BaseStrategy {
                 if (fullExitBull || fullExitBear) {
                     const exitEvent = this.tradeManager.closePosition(time[i], close[i], 'exit_signal', candleData);
                     if (exitEvent) tradeEvents.push(exitEvent);
+                } else if (pos.tps && pos.tps.length > 1 && pos.tps[1].hit && pos.quantity > 0) {
+                    // TP2 hit -> initiate dynamic trailing for the remaining quantity
+                    const isHighVolatility = this.volatilityMillionMoves[i].volatilityStatus === 'High Volatility';
+                    const trailMultiplier = isHighVolatility ? 2.5 : 1.0; // Aggressive trailing (1.0x ATR) in low vol or trending market, Loose trailing (2.5x ATR) in high vol
+
+                    const dynamicTrailSl = pos.isLong
+                        ? close[i] - (this.atr[i] * trailMultiplier)
+                        : close[i] + (this.atr[i] * trailMultiplier);
+
+                    // Only trail in the direction of profit
+                    if (pos.isLong && dynamicTrailSl > pos.stoploss) {
+                        pos.stoploss = dynamicTrailSl;
+                    } else if (!pos.isLong && dynamicTrailSl < pos.stoploss) {
+                        pos.stoploss = dynamicTrailSl;
+                    }
                 }
             }
 
@@ -149,12 +167,18 @@ class SupertrendAI extends BaseStrategy {
                         price: close[i],
                         isLong: signal.bullish,
                         stoploss: stoploss,
-                        takeProfits: [{ targetPct: this.partialExitThreshold, qtyPct: 50 }],
-                        trailing: { activationPct: 1.5, trailByPct: 0.5 },
+                        takeProfits: [
+                            // TP1 at 1:2 Risk-Reward (40% qty) and move SL to breakeven
+                            { targetPct: riskAnalysis * 2, qtyPct: 40, moveToBreakeven: true },
+                            // TP2 at 1:4 Risk-Reward (40% qty)
+                            { targetPct: riskAnalysis * 4, qtyPct: 40, moveToBreakeven: false }
+                        ],
+                        trailing: null, // we are trailing manually based on volatility after TP2
                         metadata: {
                             volatility: this.volatilityMillionMoves[i].volatilityStatus,
                             session: this.sessions[i],
-                            datetime: formatTimestamp(time[i])
+                            datetime: formatTimestamp(time[i]),
+                            riskPerTrade: riskAnalysis.toFixed(2)
                         }
                     });
 

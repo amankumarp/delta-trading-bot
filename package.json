@@ -12,11 +12,12 @@
     "schema": "services/paper-trade/prisma/schema.prisma"
   },
   "scripts": {
-    "start": "concurrently --names \"market-data,strategy,order-execution,,paper-trade,main\" --prefix-colors \"cyan,green,magenta,yellow,blue,red\" \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\"   \"node main.js\"",
+    "start": "concurrently --names \"market-data,strategy,order-execution,,paper-trade,main,alerts\" --prefix-colors \"cyan,green,magenta,yellow,blue,red,yellow\" \"npm run start:market-data\" \"npm run start:strategy\" \"npm run start:order-execution\" \"node main.js\" \"npm run start:alerts\"",
     "start:market-data": "nodemon services/market-data/index.js",
     "start:strategy": "nodemon services/strategy/index.js",
     "start:order-execution": "nodemon services/order-execution/index.js",
     "start:paper-trade": "nodemon services/paper-trade/index.js",
+    "start:alerts": "node services/alert/index.js",
     "test": "echo \"No tests defined yet.\" && exit 0"
   },
   "author": "Your Name",
@@ -33,6 +34,7 @@
     "express": "^4.21.2",
     "lodash": "^4.17.21",
     "mathjs": "^10.6.4",
+    "node-cron": "^4.2.1",
     "prisma": "^6.6.0",
     "redis": "^4.7.0",
     "technicalindicators": "^3.1.0",

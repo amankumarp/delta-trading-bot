@@ -21,9 +21,13 @@ export interface Trade {
   stoploss: number;
   rsi: number;
   atr: number;
+  qnt?: number;
+  pnl?: number;
   partial_exit_time?: string;
   partial_exit_price?: number;
   partial_profit?: string;
+  partial_exit_qnt?: number;
+  partial_pnl?: number;
   supertrend?: number;
   ema8?: number;
   ema13?: number;

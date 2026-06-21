@@ -15,7 +15,8 @@ class TradeManager {
         const tps = takeProfits.map(tp => ({
             ...tp,
             targetPrice: isLong ? price * (1 + tp.targetPct / 100) : price * (1 - tp.targetPct / 100),
-            hit: false
+            hit: false,
+            moveToBreakeven: tp.moveToBreakeven || false
         })).sort((a, b) => isLong ? a.targetPrice - b.targetPrice : b.targetPrice - a.targetPrice);
 
         this.position = {
@@ -96,6 +97,11 @@ class TradeManager {
                 pos.quantity -= qtyToExit;
 
                 events.push(this._executeExit(time, tp.targetPrice, qtyToExit, 'take_profit', candle));
+
+                // Move stoploss to breakeven if configured
+                if (tp.moveToBreakeven) {
+                    pos.stoploss = pos.entry_price;
+                }
 
                 if (pos.quantity <= 0.01) { // Floating point safety
                     return events; // Position fully closed
