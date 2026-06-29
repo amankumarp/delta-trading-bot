@@ -1,4 +1,4 @@
-const { TradeSummaryObserver, EquityObserver, CategoricalObserver, TimeObserver, parseCustomDate } = require('./Observers');
+const { TradeSummaryObserver, EquityObserver, CategoricalObserver, TimeObserver, VolatilityObserver, parseCustomDate } = require('./Observers');
 
 class BacktestEngine {
     constructor(options = {}) {
@@ -13,7 +13,8 @@ class BacktestEngine {
             new TradeSummaryObserver(this.options),
             new EquityObserver(this.options),
             new CategoricalObserver(this.options),
-            new TimeObserver(this.options)
+            new TimeObserver(this.options),
+            new VolatilityObserver(this.options)
         ];
     }
 

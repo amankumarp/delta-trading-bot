@@ -18,6 +18,7 @@ export interface Trade {
   isLong: boolean;
   session: string;
   volatility: string;
+  avg_profit?: string;
   stoploss: number;
   rsi: number;
   atr: number;
@@ -121,6 +122,10 @@ export interface Analysis {
   avgDurationLosses: string;
   recoveryFactor: string;
   largestDrawdown?: string;
+  sessions?: any[];
+  volatility?: any[];
+  positions?: any[];
+  daily?: any;
 }
 
 export interface BacktestResponse {

@@ -6,6 +6,22 @@ import {
 } from 'recharts';
 import { TrendDataPoint } from '../types';
 
+const MAX_RECHART_POINTS = 1200;
+
+const sampleByIndex = <T,>(items: T[], maxItems = MAX_RECHART_POINTS) => {
+  if (items.length <= maxItems) return items;
+
+  const result: T[] = [];
+  const last = items.length - 1;
+  const step = last / (maxItems - 1);
+
+  for (let i = 0; i < maxItems; i += 1) {
+    result.push(items[Math.round(i * step)]);
+  }
+
+  return result;
+};
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -29,7 +45,7 @@ export const MarketTrendEquityChart: React.FC<{ data: TrendDataPoint[] }> = ({ d
 
   // We want to visualize the background based on the 'trend' property
   // and overlay the 'equity' as a line.
-  const chartData = data.map((d, i) => ({
+  const chartData = sampleByIndex(data).map((d, i) => ({
     ...d,
     index: i,
     label: new Date(d.time * 1000).toLocaleDateString(),
@@ -88,7 +104,7 @@ export const MarketTrendEquityChart: React.FC<{ data: TrendDataPoint[] }> = ({ d
 
 // --- Cumulative Equity Curve ---
 export const EquityCurveChart: React.FC<{ data: string[] }> = ({ data }) => {
-  const chartData = data.map((val, idx) => ({ trade: idx + 1, profit: parseFloat(val) }));
+  const chartData = sampleByIndex(data.map((val, idx) => ({ trade: idx + 1, profit: parseFloat(val) })));
   return (
     <div className="bg-[#0f172a] border border-white/5 p-8 rounded-xl h-[450px]">
       <h3 className="text-sm font-black text-slate-100 mb-6 uppercase tracking-widest">Cumulative Profit</h3>

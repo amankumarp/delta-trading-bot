@@ -1,10 +1,10 @@
 const { fetchCandlesFromCoinDCX, fetchCandlesFromDelta } = require("../delta");
 const { db, saveToSQLite, ensureTable, loadLatestTime } = require("../db");
 
-const symbols = ["BTC_USDT",'XAU_USDT'];
+const symbols = ["BTC_USDT", "ETH_USDT", 'XAU_USDT'];
 
 
-async function backfill(symbol, interval = "1m", years = 1) {
+async function backfill(symbol, interval = "1m", years = 10) {
   const table = `${symbol.toLowerCase()}_${interval}`;
   const intervalSec = 60;
 
@@ -14,8 +14,8 @@ async function backfill(symbol, interval = "1m", years = 1) {
   let lastStored = await loadLatestTime(table);
   let from, to;
 
-  // backfill 5 years of historical data in chunks (1000 candles per request)
-  console.log(`Backfilling ${years} years of data...`);
+  // backfill 10 years of historical data in chunks (1000 candles per request)
+  console.log(`Backfilling ${years} years of data for ${symbol}...`);
   from = now - years * 365 * 24 * 3600;
   if (lastStored > from) {
     console.log(`Last stored time is ${new Date(lastStored * 1000).toISOString()}, starting from there.`);
@@ -27,7 +27,7 @@ async function backfill(symbol, interval = "1m", years = 1) {
     if (to > now) to = now;
 
     const candles = await fetchCandlesFromCoinDCX(symbol, interval, from, to);
-    if (candles.length === 0) break
+    if (candles.length === 0) break;
 
     await saveToSQLite(table, candles);
 
@@ -40,9 +40,9 @@ async function backfill(symbol, interval = "1m", years = 1) {
   }
 }
 
-async function runBackfillAll() {
+async function runBackfillAll(years = 10) {
   for (const sym of symbols) {
-    await backfill(sym);
+    await backfill(sym, "1m", years);
   }
 }
 

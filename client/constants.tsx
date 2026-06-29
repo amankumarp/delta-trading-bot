@@ -5,7 +5,10 @@ export const INTERVAL_OPTIONS = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d
 export const ASSET_OPTIONS = ['BTC_USDT', 'ETH_USDT', 'SOL_USDT', 'XAU_USDT', 'EUR_USD'];
 export const STRATEGY_OPTIONS = [
   { id: 'supertrend-ai', name: 'Supertrend AI', description: 'Advanced trend following with machine learning volatility filters.', icon: 'Zap' },
-  { id: 'bb-ai', name: 'Bollinger AI', description: 'Mean reversion strategy leveraging Gaussian distribution and neural signals.', icon: 'Activity' }
+  { id: 'bb-ai', name: 'Bollinger AI', description: 'Mean reversion strategy leveraging Gaussian distribution and neural signals.', icon: 'Activity' },
+  { id: 'scalping-ai', name: 'Scalping AI', description: 'BTC scalping with EMA ribbon, MACD, RSI & ATR trailing SL. Min 1:2 RR, >50% win-rate target.', icon: 'Crosshair' },
+  { id: 'imba-algo', name: 'IMBA ALGO', description: 'Fibonacci channel trend system with 4 TP levels, break-even logic, RSI filter & live drawdown tracking.', icon: 'TrendingUp' },
+  { id: 'sats', name: 'SATS', description: 'Self-Aware Trend System v1.9.0 — adaptive TQI + dynamic TP', icon: 'Compass' }
 ];
 
 const generateRichMockData = (): BacktestResponse => {

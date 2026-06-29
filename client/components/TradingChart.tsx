@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createChart, IChartApi, ColorType, LineStyle, MouseEventParams } from 'lightweight-charts';
 import { Candle, Trade, IndicatorSettings } from '../types';
 import { calculateEMA, calculateBollingerBands, calculateRSI, calculateMACD } from '../utils/indicators';
@@ -11,6 +11,48 @@ interface TradingChartProps {
   focusedTradeId?: number;
   indicatorSettings: IndicatorSettings;
 }
+
+const MAX_RENDER_CANDLES = 8000;
+const MAX_RENDER_TRADES = 600;
+
+const aggregateCandles = (items: Candle[], maxItems = MAX_RENDER_CANDLES) => {
+  if (items.length <= maxItems) return items;
+
+  const bucketSize = Math.ceil(items.length / maxItems);
+  const result: Candle[] = [];
+
+  for (let i = 0; i < items.length; i += bucketSize) {
+    const bucket = items.slice(i, i + bucketSize);
+    if (!bucket.length) continue;
+
+    result.push({
+      time: bucket[0].time,
+      open: bucket[0].open,
+      high: Math.max(...bucket.map((c) => c.high)),
+      low: Math.min(...bucket.map((c) => c.low)),
+      close: bucket[bucket.length - 1].close,
+      volume: bucket.reduce((sum, c) => sum + (c.volume || 0), 0),
+    });
+  }
+
+  return result;
+};
+
+const sampleTradeIndexes = (total: number, focusedTradeId?: number) => {
+  if (total <= MAX_RENDER_TRADES) return Array.from({ length: total }, (_, i) => i);
+
+  const indexes = new Set<number>();
+  const step = total / MAX_RENDER_TRADES;
+  for (let i = 0; i < MAX_RENDER_TRADES; i += 1) {
+    indexes.add(Math.floor(i * step));
+  }
+
+  if (focusedTradeId !== undefined) indexes.add(focusedTradeId);
+  indexes.add(0);
+  indexes.add(total - 1);
+
+  return Array.from(indexes).sort((a, b) => a - b);
+};
 
 const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTradeId, indicatorSettings }) => {
   const mainChartRef = useRef<HTMLDivElement>(null);
@@ -26,6 +68,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
   }>({ main: null, rsi: null, macd: null });
 
   const seriesRef = useRef<any>({});
+  const renderCandles = useMemo(() => aggregateCandles(candles), [candles]);
+  const renderTradeIndexes = useMemo(() => sampleTradeIndexes(trades.length, focusedTradeId), [trades.length, focusedTradeId]);
 
   const parseTime = (dateStr?: string) => {
     if (!dateStr) return Date.now() / 1000;
@@ -37,7 +81,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
   };
 
   useEffect(() => {
-    if (!mainChartRef.current || !candles.length) return;
+    if (!mainChartRef.current || !renderCandles.length) return;
 
     // --- Main Chart Init ---
     const mainChart = createChart(mainChartRef.current, {
@@ -68,8 +112,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
     });
     seriesRef.current.candles = candleSeries;
 
-    const prices = candles.map(c => c.close);
-    const formattedCandles = candles.map(c => ({
+    const prices = renderCandles.map(c => c.close);
+    const formattedCandles = renderCandles.map(c => ({
       time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close,
     }));
     candleSeries.setData(formattedCandles);
@@ -88,7 +132,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
         bottom: 0,
       },
     });
-    const volumeData = candles.map(c => ({
+    const volumeData = renderCandles.map(c => ({
       time: c.time as any,
       value: c.volume,
       color: c.close >= c.open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)',
@@ -102,7 +146,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
 
       if (ind.type === 'EMA') {
         const period = ind.params.period || 20;
-        const emaData = calculateEMA(prices, period).map((v, i) => ({ time: candles[i].time as any, value: v }));
+        const emaData = calculateEMA(prices, period).map((v, i) => ({ time: renderCandles[i].time as any, value: v }));
         const emaSeries = mainChart.addLineSeries({ color: ind.color, lineWidth: 2, title: `EMA ${period}` });
         emaSeries.setData(emaData);
       } else if (ind.type === 'BB') {
@@ -111,8 +155,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
         const bbData = calculateBollingerBands(prices, period, multiplier);
         const bbUpper = mainChart.addLineSeries({ color: ind.color, lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'BB Upper' });
         const bbLower = mainChart.addLineSeries({ color: ind.color, lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'BB Lower' });
-        bbUpper.setData(bbData.map((v, i) => ({ time: candles[i].time as any, value: v.upper || 0 })).filter(d => d.value !== 0));
-        bbLower.setData(bbData.map((v, i) => ({ time: candles[i].time as any, value: v.lower || 0 })).filter(d => d.value !== 0));
+        bbUpper.setData(bbData.map((v, i) => ({ time: renderCandles[i].time as any, value: v.upper || 0 })).filter(d => d.value !== 0));
+        bbLower.setData(bbData.map((v, i) => ({ time: renderCandles[i].time as any, value: v.lower || 0 })).filter(d => d.value !== 0));
       } else if (ind.type === 'RSI' && rsiChartRef.current) {
         if (!chartInstances.current.rsi) {
           const rsiChart = createChart(rsiChartRef.current, {
@@ -124,12 +168,12 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
           chartInstances.current.rsi = rsiChart;
           const rsi70 = rsiChart.addLineSeries({ color: 'rgba(244, 63, 94, 0.2)', lineWidth: 1, lineStyle: LineStyle.Dashed });
           const rsi30 = rsiChart.addLineSeries({ color: 'rgba(16, 185, 129, 0.2)', lineWidth: 1, lineStyle: LineStyle.Dashed });
-          rsi70.setData(candles.map(c => ({ time: c.time as any, value: 70 })));
-          rsi30.setData(candles.map(c => ({ time: c.time as any, value: 30 })));
+          rsi70.setData(renderCandles.map(c => ({ time: c.time as any, value: 70 })));
+          rsi30.setData(renderCandles.map(c => ({ time: c.time as any, value: 30 })));
         }
         const rsiSeries = chartInstances.current.rsi.addLineSeries({ color: ind.color, lineWidth: 2, title: `RSI ${ind.params.period}` });
         const rsiVal = calculateRSI(prices, ind.params.period || 14);
-        rsiSeries.setData(rsiVal.map((v, i) => ({ time: candles[i].time as any, value: v })).filter(d => d.value !== null));
+        rsiSeries.setData(rsiVal.map((v, i) => ({ time: renderCandles[i].time as any, value: v })).filter(d => d.value !== null));
       } else if (ind.type === 'MACD' && macdChartRef.current) {
         if (!chartInstances.current.macd) {
           const macdChart = createChart(macdChartRef.current, {
@@ -144,10 +188,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
         const mLine = chartInstances.current.macd.addLineSeries({ color: ind.color, lineWidth: 2 });
         const sLine = chartInstances.current.macd.addLineSeries({ color: '#f59e0b', lineWidth: 1 });
         const hGram = chartInstances.current.macd.addHistogramSeries({ color: '#475569' });
-        mLine.setData(macdLine.map((v, i) => ({ time: candles[i].time as any, value: v })));
-        sLine.setData(signalLine.map((v, i) => ({ time: candles[i].time as any, value: v })));
+        mLine.setData(macdLine.map((v, i) => ({ time: renderCandles[i].time as any, value: v })));
+        sLine.setData(signalLine.map((v, i) => ({ time: renderCandles[i].time as any, value: v })));
         hGram.setData(histogram.map((v, i) => ({
-          time: candles[i].time as any,
+          time: renderCandles[i].time as any,
           value: v,
           color: v >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)'
         })));
@@ -156,7 +200,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
 
     // --- Interactive Markers ---
     const markers: any[] = [];
-    trades.forEach((trade, idx) => {
+    renderTradeIndexes.forEach((idx) => {
+      const trade = trades[idx];
+      if (!trade) return;
       const entryT = parseTime(trade.entry_time);
       const exitT = parseTime(trade.exit_time);
 
@@ -231,7 +277,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
       chartInstances.current.rsi = null;
       chartInstances.current.macd = null;
     };
-  }, [candles, trades, indicatorSettings]);
+  }, [renderCandles, renderTradeIndexes, trades, indicatorSettings]);
 
   // Handle Track on Chart Logic
   useEffect(() => {
@@ -268,7 +314,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ candles, trades, focusedTra
     <div className="flex flex-col gap-4 w-full bg-[#0f172a] rounded-[2.5rem] p-6 relative group overflow-hidden">
       <div className="absolute top-8 left-10 z-10 flex items-center gap-4 bg-slate-900/90 border border-slate-700/50 p-3 px-5 rounded-2xl backdrop-blur-xl shadow-2xl">
         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Temporal Flow Visualizer v2.1</span>
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+          Temporal Flow Visualizer v2.1
+          {candles.length > renderCandles.length ? ` | ${renderCandles.length.toLocaleString()} / ${candles.length.toLocaleString()} candles` : ''}
+        </span>
       </div>
 
       {selectedTrade && (

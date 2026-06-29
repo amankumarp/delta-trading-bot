@@ -9,7 +9,11 @@ const math = require('mathjs');
 function calculateSMA(prices, period) {
     return prices.map((_, i, arr) => {
         if (i < period - 1) return null;
-        return math.mean(arr.slice(i - period + 1, i + 1));
+        let sum = 0;
+        for (let j = i - period + 1; j <= i; j++) {
+            sum += arr[j];
+        }
+        return sum / period;
     });
 }
 
@@ -36,7 +40,9 @@ function calculateEMA(prices, period) {
  * @returns {number[]} - SMMA values
  */
 function calculateSMMA(prices, period) {
-    let smma = [math.mean(prices.slice(0, period))];
+    let initialSum = 0;
+    for(let j=0; j<period; j++) initialSum += prices[j];
+    let smma = [initialSum / period];
 
     for (let i = period; i < prices.length; i++) {
         smma.push((smma[smma.length - 1] * (period - 1) + prices[i]) / period);

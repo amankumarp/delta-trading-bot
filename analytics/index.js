@@ -1,9 +1,27 @@
 const express = require("express");
-const dotenv = require("dotenv");
-const axios = require("axios");
-const cors = require("cors");
-const BacktestEngine = require("./Engine");
-const QuantReporter = require("./Reporter");
+const dotenv  = require("dotenv");
+const cors    = require("cors");
+const { fork } = require("child_process");
+const path    = require("path");
+
+const BacktestEngine  = require("./Engine");
+const QuantReporter   = require("./Reporter");
+const StrategyRegistry = require("../services/strategy/StrategyRegistry");
+// ── Phase 1: In-process data access (no HTTP) ─────────────────────────────
+const CandleStore = require("../lib/CandleStore");
+
+// ── Phase 2: Single canonical trade builder and scorer ────────────────────
+const { buildTradeList } = require("../lib/TradeBuilder");
+
+const {
+  monteCarlo,
+  inSampleOutOfSample,
+  walkForward,
+  parameterSensitivity,
+  fullRobustnessReport,
+} = require("./RobustnessEngine");
+
+const crypto = require("crypto");
 
 dotenv.config();
 
@@ -13,53 +31,609 @@ const port = 4040;
 app.use(express.json());
 app.use(cors({ origin: "*" }));
 
+let requestCount = 0;
+
+// ── Phase 6: Structured Request Logging with Correlation ID ───────────────────
+app.use((req, res, next) => {
+  requestCount++;
+  req.id = req.headers['x-correlation-id'] || crypto.randomUUID();
+  const start = Date.now();
+  res.setHeader('X-Correlation-ID', req.id);
+  
+  res.on('finish', () => {
+    const elapsed = Date.now() - start;
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      req_id: req.id,
+      method: req.method,
+      url: req.originalUrl,
+      status: res.statusCode,
+      latency_ms: elapsed,
+      service: 'analytics'
+    }));
+  });
+  next();
+});
+
+// NEW: Expose strategy metadata to the frontend
+app.get('/api/strategies/list', (req, res) => {
+    try {
+        const StrategyRegistry = require('../services/strategy/StrategyRegistry');
+        res.json({
+            status: "success",
+            strategies: StrategyRegistry.listMeta()
+        });
+    } catch (e) {
+        res.status(500).json({ error: "Failed to list strategies", details: e.message });
+    }
+});
+
+// ─── Paper Trading API Routes ───────────────────────────────────────────────
+const PaperEngine = require('./PaperEngine');
+
+app.post('/api/paper/deploy', async (req, res) => {
+    try {
+        const id = await PaperEngine.deploy(req.body);
+        res.json({ status: "success", id, message: "Strategy deployed to paper trading engine" });
+    } catch (e) {
+        res.status(500).json({ error: "Failed to deploy strategy", details: e.message });
+    }
+});
+
+app.post('/api/paper/stop', async (req, res) => {
+    try {
+        await PaperEngine.stopAll();
+        res.json({ status: "success", message: "Paper trading engine stopped" });
+    } catch (e) {
+        res.status(500).json({ error: "Failed to stop paper trading", details: e.message });
+    }
+});
+
+app.get('/api/paper/status', async (req, res) => {
+    try {
+        const status = await PaperEngine.getStatus();
+        res.json(status);
+    } catch (e) {
+        res.status(500).json({ error: "Failed to fetch paper trading status", details: e.message });
+    }
+});
+
 app.get("/api/analyze", async (req, res) => {
   try {
-    const start = req.query.start;
-    const end = req.query.end;
-    const interval = req.query.interval;
-    const symbol = req.query.symbol;
-    const strategy = req.query.strategy || "supertrend-ai";
+    const { start, end, interval, symbol } = req.query;
+    const strategy  = req.query.strategy || "imba-algo";
 
-    const initialBalance = parseFloat(req.query.balance) || 10000;
-    const leverage = parseFloat(req.query.leverage) || 200;
-    const fee = parseFloat(req.query.fee) || 0.01;
-    const riskPercentPerTrade = parseFloat(req.query.risk) || 1;
+    const initialBalance     = parseFloat(req.query.balance)   || 10000;
+    const leverage           = parseFloat(req.query.leverage)  || 200;
+    const fee                = parseFloat(req.query.fee)       || 0.01;
+    const riskPercentPerTrade = parseFloat(req.query.risk)     || 1;
 
-    const response = await axios.get(`http://localhost:3002/strategy/${strategy}?symbol=${symbol}&interval=${interval}&onlytrade=true&start=${start}&end=${end}`);
-    const trades = response.data.trades;
-
-    if (!Array.isArray(trades) || trades.length === 0) {
-      return res.status(400).json({ error: "No trades found for analysis" });
+    if (!symbol || !interval) {
+      return res.status(400).json({ error: "Missing required params: symbol, interval" });
     }
 
-    const engine = new BacktestEngine({
-      initialBalance,
-      leverage,
-      fee,
-      riskPercentPerTrade
+    // ── Phase 1: fetch in-process, no HTTP ──────────────────────────────
+    const ohlcv = await CandleStore.getAsOHLCV({
+      symbol,
+      interval,
+      from: start ? parseInt(start) : undefined,
+      to:   end   ? parseInt(end)   : undefined,
     });
-    const { report, trades: processedTrades } = engine.run(trades);
+
+    if (!ohlcv.close || ohlcv.close.length < 20) {
+      if (ohlcv._isPartial) {
+         return res.status(202).json({
+            status: "partial",
+            message: "Backfilling older data...",
+            data: []
+         });
+      }
+      return res.status(400).json({ error: "Insufficient candle data (need ≥ 20 bars)" });
+    }
+
+    // ── Run selected strategy in-process ────────────────────────────────
+    const entry = StrategyRegistry.get(strategy);
+    if (!entry) {
+      return res.status(400).json({ error: `Unknown strategy: ${strategy}` });
+    }
+    const parsedOpts = entry.parseOpts(req.query);
+    const strategyInstance = new entry.Cls(parsedOpts);
+    
+    // Heikin Ashi transformation logic if strategy requires it
+    let feedOhlcv = ohlcv;
+    if (entry.useHeikinAshi) {
+      const HeikinAshi = require("../lib/HeikinAshi");
+      feedOhlcv = HeikinAshi.transform(ohlcv);
+    }
+    
+    const { candles } = strategyInstance.generateSignals(feedOhlcv);
+    const rawTrades   = buildTradeList(candles);
+
+    if (!rawTrades.length) {
+      return res.status(400).json({ error: "No trades generated by strategy" });
+    }
+
+    const engine = new BacktestEngine({ initialBalance, leverage, fee, riskPercentPerTrade });
+    const { report, trades: processedTrades } = engine.run(rawTrades);
     const analysis = QuantReporter.generateReport(report);
 
-    res.json({ 
-      analysis, 
+    const candleArr = await CandleStore.get({ symbol, interval,
+      from: start ? parseInt(start) : undefined,
+      to:   end   ? parseInt(end)   : undefined,
+    });
+
+    const trimmedCandles = candleArr;
+
+    res.status(ohlcv._isPartial ? 202 : 200).json({
+      status: ohlcv._isPartial ? "partial" : "success",
+      message: ohlcv._isPartial ? "Backfilling older data..." : undefined,
+      analysis,
       trades: processedTrades,
-      candles: response.data.candles.map(candle => ({
-        time: candle.time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        volume: candle.volume
-      }))
+      candles: trimmedCandles.map(c => ({
+        time: c.time, open: c.open, high: c.high,
+        low: c.low, close: c.close, volume: c.volume,
+      })),
     });
   } catch (error) {
     console.error("Error analyzing trades:", error);
-    res.status(500).json({ error: "Failed to analyze trades" });
+    res.status(500).json({ error: "Failed to analyze trades", details: error.message });
   }
 });
 
-app.listen(port, () => {
-  console.log(`Trade Analysis API running at http://localhost:${port}`);
+// ─── Parameter Optimisation Endpoint ───────────────────────────────────────
+//
+// GET /api/optimize
+//
+// Runs a grid search over ImbaAlgo parameters using the same candle data as
+// /api/analyze. All parameters of /api/analyze are accepted; additionally:
+//
+//   mode        – 'fast' (~300 combos, default) | 'full' (~5k combos)
+//   topN        – how many top results to return           (default: 10)
+//   minTrades   – minimum trades for a result to be valid  (default: 3)
+//   verbose     – set to 'true' to log progress            (default: false)
+//
+// PIN individual params so they are NOT swept (e.g. sensitivity=20).
+// Narrow the search space with comma-separated lists (e.g. sensitivityRange=10,20,30).
+//
+app.get("/api/optimize", async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const {
+      symbol, interval,
+      start: from, end: to,
+      balance, leverage, fee, risk,
+      topN, minTrades, verbose, mode, strategy = 'imba-algo',
+      // Pinned params
+      sensitivity, riskPercent,
+      tp1Pct, tp2Pct, tp3Pct, tp4Pct,
+      tp1SizePct, tp2SizePct, tp3SizePct,
+      breakEvenTarget, fixedStop, slPercent,
+      rsiLen, rsiOB, rsiOS, useRsiFilter,
+      // Range overrides (comma-separated)
+      sensitivityRange, tp1PctRange, tp2PctRange, tp3PctRange, tp4PctRange,
+      tp1SizePctRange, tp2SizePctRange, tp3SizePctRange, breakEvenTargetRange, slPercentRange
+    } = req.query;
+
+    if (!symbol || !interval) {
+      return res.status(400).json({ error: "Missing required params: symbol, interval" });
+    }
+
+    if (strategy !== 'imba-algo') {
+      return res.status(400).json({ error: "Optimization is currently only supported for the Imba Algo strategy." });
+    }
+
+    // ── 1. Fetch candles in-process via CandleStore (Phase 1 — no HTTP) ──
+    let ohlcv;
+    try {
+      ohlcv = await CandleStore.getAsOHLCV({
+        symbol, interval,
+        from: from ? parseInt(from) : undefined,
+        to:   to   ? parseInt(to)   : undefined,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: `Failed to fetch candles: ${err.message}` });
+    }
+
+    if (!ohlcv || !ohlcv.close || ohlcv.close.length < 50) {
+      return res.status(400).json({ error: "Insufficient candle data (need ≥ 50 bars)" });
+    }
+
+    // ── 2. Build fixed-param overrides ─────────────────────────────────────
+    const fixedParams = {};
+    if (sensitivity)     fixedParams.sensitivity     = parseFloat(sensitivity);
+    if (riskPercent)     fixedParams.riskPercent     = parseFloat(riskPercent);
+    if (tp1Pct)          fixedParams.tp1Pct          = parseFloat(tp1Pct);
+    if (tp2Pct)          fixedParams.tp2Pct          = parseFloat(tp2Pct);
+    if (tp3Pct)          fixedParams.tp3Pct          = parseFloat(tp3Pct);
+    if (tp4Pct)          fixedParams.tp4Pct          = parseFloat(tp4Pct);
+    if (tp1SizePct)      fixedParams.tp1SizePct      = parseFloat(tp1SizePct);
+    if (tp2SizePct)      fixedParams.tp2SizePct      = parseFloat(tp2SizePct);
+    if (tp3SizePct)      fixedParams.tp3SizePct      = parseFloat(tp3SizePct);
+    if (breakEvenTarget) fixedParams.breakEvenTarget = breakEvenTarget;
+    if (fixedStop)       fixedParams.fixedStop       = fixedStop === "true";
+    if (slPercent)       fixedParams.slPercent       = parseFloat(slPercent);
+    if (rsiLen)          fixedParams.rsiLen          = parseInt(rsiLen);
+    if (rsiOB)           fixedParams.rsiOB           = parseFloat(rsiOB);
+    if (rsiOS)           fixedParams.rsiOS           = parseFloat(rsiOS);
+    if (useRsiFilter)    fixedParams.useRsiFilter    = useRsiFilter === "true";
+
+    // ── 3. Build search-space overrides ───────────────────────────────────
+    const parseRange = (str) => str ? str.split(",").map(Number).filter(n => !isNaN(n)) : null;
+    const paramSpace = {};
+    if (!fixedParams.sensitivity     && sensitivityRange)    paramSpace.sensitivity     = parseRange(sensitivityRange);
+    if (!fixedParams.tp1Pct          && tp1PctRange)         paramSpace.tp1Pct          = parseRange(tp1PctRange);
+    if (!fixedParams.tp2Pct          && tp2PctRange)         paramSpace.tp2Pct          = parseRange(tp2PctRange);
+    if (!fixedParams.tp3Pct          && tp3PctRange)         paramSpace.tp3Pct          = parseRange(tp3PctRange);
+    if (!fixedParams.tp4Pct          && tp4PctRange)         paramSpace.tp4Pct          = parseRange(tp4PctRange);
+    if (!fixedParams.tp1SizePct      && tp1SizePctRange)     paramSpace.tp1SizePct      = parseRange(tp1SizePctRange);
+    if (!fixedParams.tp2SizePct      && tp2SizePctRange)     paramSpace.tp2SizePct      = parseRange(tp2SizePctRange);
+    if (!fixedParams.tp3SizePct      && tp3SizePctRange)     paramSpace.tp3SizePct      = parseRange(tp3SizePctRange);
+    if (!fixedParams.breakEvenTarget && breakEvenTargetRange) paramSpace.breakEvenTarget= breakEvenTargetRange.split(",");
+    if (!fixedParams.slPercent       && slPercentRange)      paramSpace.slPercent       = parseRange(slPercentRange);
+
+    // ── 4. Pack OHLCV into SharedArrayBuffer (zero-copy to worker) ───────────
+    const { packOHLCV, getPool } = require('../lib/WorkerPool');
+    const { sab, n } = packOHLCV(ohlcv);
+
+    const engineOpts = {
+      initialBalance:      parseFloat(balance)  || 10000,
+      leverage:            parseFloat(leverage) || 200,
+      fee:                 parseFloat(fee)       || 0.01,
+      riskPercentPerTrade: parseFloat(risk)      || 1,
+    };
+
+    const workerOpts = {
+      topN:       parseInt(topN)        || 10,
+      minTrades:  parseInt(minTrades)   || 3,
+      mode:       mode || 'fast',
+      verbose:    verbose === 'true',
+      fixedParams,
+      paramSpace: Object.keys(paramSpace).length ? paramSpace : undefined,
+    };
+
+    // ── Phase 3: WorkerPool dispatch (pooled worker_thread, ~5ms overhead) ──
+    const pool   = getPool();
+    const result = await pool.run('optimize', { sab }, { engineOpts, ...workerOpts }, (progress) => {
+        // Emit progress so WebSocket can forward it
+        EventBus.emit('optimize_progress', progress);
+    });
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+
+    if (result && result.error) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    res.json({
+      meta: {
+        symbol, interval, from, to,
+        totalCandleBars:         n,
+        totalCombinationsTested: result?.totalRuns  || 0,
+        validResults:            result?.validRuns  || 0,
+        elapsedSeconds:          parseFloat(elapsed),
+      },
+      best:    result?.best,
+      results: result?.results,
+    });
+
+  } catch (error) {
+    if (!res.headersSent) {
+      console.error('[/api/optimize] Error:', error.message);
+      res.status(500).json({ error: 'Optimisation failed', details: error.message });
+    }
+  }
 });
+
+
+// ─── Shared helpers for robustness endpoints ──────────────────────────────────
+// buildTradeList is now imported from lib/TradeBuilder.js (Phase 2)
+
+/**
+ * Shared helper: fetch candles + run ImbaAlgo strategy → return { ohlcv, processedTrades, engineOpts }
+ */
+async function fetchAndRun(req) {
+  const { symbol, interval, start: from, end: to, balance, leverage, fee, risk, strategy = 'imba-algo' } = req.query;
+
+  // ── Phase 1: in-process fetch — no HTTP round-trip ──────────────────────
+  const ohlcv = await CandleStore.getAsOHLCV({
+    symbol, interval,
+    from: from ? parseInt(from) : undefined,
+    to:   to   ? parseInt(to)   : undefined,
+  });
+  if (!ohlcv || !ohlcv.close || ohlcv.close.length < 20) {
+    if (ohlcv && ohlcv._isPartial) {
+      throw Object.assign(new Error("Backfilling older data..."), { status: 202, isPartial: true });
+    }
+    throw Object.assign(new Error("Insufficient candle data (need ≥ 20 bars)"), { status: 400 });
+  }
+
+  const entry = StrategyRegistry.get(strategy);
+  if (!entry) throw Object.assign(new Error(`Unknown strategy: ${strategy}`), { status: 400 });
+
+  const stratParams = entry.parseOpts(req.query);
+  const strategyInstance = new entry.Cls(stratParams);
+
+  // Heikin Ashi transformation logic if strategy requires it
+  let feedOhlcv = ohlcv;
+  if (entry.useHeikinAshi) {
+    const HeikinAshi = require("../lib/HeikinAshi");
+    feedOhlcv = HeikinAshi.transform(ohlcv);
+  }
+
+  const { candles, signals } = strategyInstance.generateSignals(feedOhlcv, { lean: true });
+  let rawTrades = [];
+  if (signals && signals.length > 0) {
+      let currentTrade = null;
+      let partialProfitSum = 0;
+      for (let j = 0; j < signals.length; j++) {
+          const s = signals[j];
+          if (s.signal === 'entry' || (typeof s.signal === 'string' && (s.signal.includes('Buy') || s.signal.includes('Sell')))) {
+              currentTrade = { isLong: s.isLong !== undefined ? s.isLong : s.bullish, entry_time: s.datetime || String(s.time), entry_price: s.price || s.close, stoploss: s.stoploss, losspoint: 0, _done: false };
+              partialProfitSum = 0;
+          } else if (s.signal === 'partial_exit' && currentTrade) {
+              partialProfitSum += s.profit_pct || 0;
+          } else if (s.signal === 'exit' && currentTrade) {
+              partialProfitSum += s.profit_pct || 0;
+              currentTrade.exit_time = s.datetime || String(s.time);
+              currentTrade.exit_price = s.price;
+              currentTrade.avg_profit = partialProfitSum.toFixed(2);
+              currentTrade.exit_reason = s.reason;
+              rawTrades.push(currentTrade);
+              currentTrade = null;
+          }
+      }
+  } else {
+      rawTrades = buildTradeList(candles);
+  }
+
+  if (!rawTrades.length) throw Object.assign(new Error("No trades generated"), { status: 400 });
+
+  const engineOpts = {
+    initialBalance:      parseFloat(balance)   || 10000,
+    leverage:            parseFloat(leverage)  || 50,
+    fee:                 parseFloat(fee)        || 0.0,
+    riskPercentPerTrade: parseFloat(risk)       || 1,
+  };
+
+  const engine = new BacktestEngine(engineOpts);
+  const { trades: processedTrades } = engine.run(rawTrades);
+
+  return { ohlcv, processedTrades, rawTrades, engineOpts, stratParams, symbol, interval, from, to, strategyName: strategy };
+}
+
+// ─── POST /api/robustness/monte-carlo ─────────────────────────────────────────
+//
+// Query params (same as /api/analyze plus):
+//   simulations  – number of MC sims (default 1000)
+//   confidences  – comma-separated percentile levels (default "5,10,25,50,75,90,95")
+//
+app.get("/api/robustness/monte-carlo", async (req, res) => {
+  try {
+    const { ohlcv, processedTrades, engineOpts, symbol, interval, from, to } = await fetchAndRun(req);
+    const simulations = parseInt(req.query.simulations) || 1000;
+    const confidences = req.query.confidences
+      ? req.query.confidences.split(",").map(Number)
+      : undefined;
+    const dropoutRate = parseFloat(req.query.dropoutRate) || 0.0;
+    const noiseLevel  = parseFloat(req.query.noiseLevel)  || 0.0;
+
+    const result = monteCarlo(processedTrades, engineOpts, { simulations, confidences, dropoutRate, noiseLevel, ohlcv });
+
+    res.status(ohlcv._isPartial ? 202 : 200).json({ 
+      status: ohlcv._isPartial ? "partial" : "success",
+      message: ohlcv._isPartial ? "Backfilling older data..." : undefined,
+      meta: { symbol, interval, from, to, bars: ohlcv.close.length }, 
+      ...result 
+    });
+  } catch (err) {
+    console.error("[/api/robustness/monte-carlo]", err.message);
+    if (err.isPartial) {
+      return res.status(202).json({ status: "partial", message: err.message, data: [] });
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/robustness/is-oos ───────────────────────────────────────────────
+//
+// Query params (same as /api/analyze plus):
+//   trainPct  – fraction used for in-sample (default 0.7)
+//
+app.get("/api/robustness/is-oos", async (req, res) => {
+  try {
+    const { ohlcv, processedTrades, engineOpts, symbol, interval, from, to } = await fetchAndRun(req);
+    const trainPct = parseFloat(req.query.trainPct) || 0.7;
+
+    const result = inSampleOutOfSample(processedTrades, engineOpts, { trainPct });
+
+    res.status(ohlcv._isPartial ? 202 : 200).json({ 
+      status: ohlcv._isPartial ? "partial" : "success",
+      message: ohlcv._isPartial ? "Backfilling older data..." : undefined,
+      meta: { symbol, interval, from, to, bars: ohlcv.close.length, totalTrades: processedTrades.length }, 
+      ...result 
+    });
+  } catch (err) {
+    console.error("[/api/robustness/is-oos]", err.message);
+    if (err.isPartial) {
+      return res.status(202).json({ status: "partial", message: err.message, data: [] });
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/robustness/walk-forward ────────────────────────────────────────
+//
+// Query params (same as /api/analyze plus):
+//   windows   – number of walk-forward windows (default 5)
+//   trainPct  – IS fraction within each window  (default 0.7)
+//
+app.get("/api/robustness/walk-forward", async (req, res) => {
+  try {
+    const { ohlcv, processedTrades, engineOpts, symbol, interval, from, to } = await fetchAndRun(req);
+    const windows  = parseInt(req.query.windows)       || 5;
+    const trainPct = parseFloat(req.query.trainPct)    || 0.7;
+
+    const result = walkForward(processedTrades, engineOpts, { windows, trainPct });
+
+    res.status(ohlcv._isPartial ? 202 : 200).json({ 
+      status: ohlcv._isPartial ? "partial" : "success",
+      message: ohlcv._isPartial ? "Backfilling older data..." : undefined,
+      meta: { symbol, interval, from, to, bars: ohlcv.close.length, totalTrades: processedTrades.length }, 
+      ...result 
+    });
+  } catch (err) {
+    console.error("[/api/robustness/walk-forward]", err.message);
+    if (err.isPartial) {
+      return res.status(202).json({ status: "partial", message: err.message, data: [] });
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/robustness/sensitivity ─────────────────────────────────────────
+//
+// Query params (same as /api/analyze plus):
+//   step   – nudge fraction, e.g. 0.1 = ±10% (default 0.1)
+//
+app.get("/api/robustness/sensitivity", async (req, res) => {
+  try {
+    const { ohlcv, processedTrades, engineOpts, stratParams, symbol, interval, from, to, strategyName } =
+      await fetchAndRun(req);
+    const step = parseFloat(req.query.step) || 0.1;
+
+    const result = parameterSensitivity(stratParams, ohlcv, engineOpts, {
+      step,
+      buildTrades: buildTradeList,
+      strategyName
+    });
+
+    res.status(ohlcv._isPartial ? 202 : 200).json({ 
+      status: ohlcv._isPartial ? "partial" : "success",
+      message: ohlcv._isPartial ? "Backfilling older data..." : undefined,
+      meta: { symbol, interval, from, to, bars: ohlcv.close.length }, 
+      ...result 
+    });
+  } catch (err) {
+    console.error("[/api/robustness/sensitivity]", err.message);
+    if (err.isPartial) {
+      return res.status(202).json({ status: "partial", message: err.message, data: [] });
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/robustness/full ─────────────────────────────────────────────────
+//
+// Runs ALL four tests in one call and returns a unified robustness report.
+//
+// Additional query params:
+//   mcSimulations  – Monte Carlo iterations  (default 1000)
+//   wfWindows      – Walk-forward windows    (default 5)
+//   trainPct       – IS fraction             (default 0.7)
+//   step           – Sensitivity nudge size  (default 0.1)
+//
+app.get("/api/robustness/full", async (req, res) => {
+  try {
+    const { ohlcv, processedTrades, engineOpts, stratParams, symbol, interval, from, to, strategyName } =
+      await fetchAndRun(req);
+
+    const result = fullRobustnessReport(processedTrades, engineOpts, {
+      mcSimulations: parseInt(req.query.mcSimulations) || 500,  // lower default for speed
+      wfWindows:     parseInt(req.query.wfWindows)     || 5,
+      trainPct:      parseFloat(req.query.trainPct)    || 0.7,
+      bestParams:    stratParams,
+      ohlcv,
+      buildTrades:   buildTradeList,
+      strategyName
+    });
+
+    res.status(ohlcv._isPartial ? 202 : 200).json({
+      status: ohlcv._isPartial ? "partial" : "success",
+      message: ohlcv._isPartial ? "Backfilling older data..." : undefined,
+      meta: { symbol, interval, from, to, bars: ohlcv.close.length, totalTrades: processedTrades.length },
+      ...result,
+    });
+  } catch (err) {
+    console.error("[/api/robustness/full]", err.message);
+    if (err.isPartial) {
+      return res.status(202).json({ status: "partial", message: err.message, data: [] });
+    }
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── Phase 6: Health Endpoint ─────────────────────────────────────────────────
+
+app.get('/health', (req, res) => {
+  const { getPool, POOL_SIZE } = require('../lib/WorkerPool');
+  const pool    = getPool();
+  const busy    = pool._workers.filter(w => w.busy).length;
+  const queued  = pool._queue.length;
+  res.json({
+    status:    'ok',
+    service:   'analytics',
+    port,
+    uptime:    process.uptime(),
+    requests:  requestCount,
+    workers:   { total: POOL_SIZE, busy, idle: POOL_SIZE - busy, queued },
+    db:        'connected',
+  });
+});
+
+// ─── Phase 5: HTTP + WebSocket server (live signal push) ─────────────────────
+
+const http = require('http');
+const { WebSocketServer } = require('ws');
+const EventBus = require('../lib/EventBus');
+
+const server = http.createServer(app);
+const wss    = new WebSocketServer({ server, path: '/ws/signals' });
+
+// Broadcast live signal events to all connected dashboard clients
+EventBus.on('signal', (payload) => {
+  const msg = JSON.stringify({ type: 'signal', ...payload });
+  wss.clients.forEach((client) => {
+    if (client.readyState === client.OPEN) client.send(msg);
+  });
+});
+
+// Broadcast new candle notifications (so dashboard charts auto-refresh)
+EventBus.on('candle', (payload) => {
+  const msg = JSON.stringify({ type: 'candle', ...payload });
+  wss.clients.forEach((client) => {
+    if (client.readyState === client.OPEN) client.send(msg);
+  });
+});
+
+EventBus.on('data_backfilled', (payload) => {
+  const msg = JSON.stringify({ type: 'data_backfilled', ...payload });
+  wss.clients.forEach((client) => {
+    if (client.readyState === client.OPEN) client.send(msg);
+  });
+});
+
+EventBus.on('data_backfilled_complete', (payload) => {
+  const msg = JSON.stringify({ type: 'data_backfilled_complete', ...payload });
+  wss.clients.forEach((client) => {
+    if (client.readyState === client.OPEN) client.send(msg);
+  });
+});
+
+EventBus.on('optimize_progress', (payload) => {
+  const msg = JSON.stringify({ type: 'optimize_progress', ...payload });
+  wss.clients.forEach((client) => {
+    if (client.readyState === client.OPEN) client.send(msg);
+  });
+});
+
+wss.on('connection', (ws, req) => {
+  console.log(`[ws] Client connected from ${req.socket.remoteAddress}`);
+  ws.send(JSON.stringify({ type: 'connected', message: 'Live signal stream active' }));
+  ws.on('close', () => console.log('[ws] Client disconnected'));
+});
+
+server.listen(port, () => {
+  console.log(`Trade Analysis API running at http://localhost:${port}`);
+  console.log(`WebSocket live signals at    ws://localhost:${port}/ws/signals`);
+});
+

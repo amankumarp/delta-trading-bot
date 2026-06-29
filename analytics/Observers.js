@@ -298,6 +298,12 @@ class TimeObserver extends BaseObserver {
     constructor(options) {
         super(options);
         this.hourStats = {};
+        this.sessionStats = {
+            'Asian': { wins: 0, losses: 0, count: 0, profit: 0 },
+            'London': { wins: 0, losses: 0, count: 0, profit: 0 },
+            'New York': { wins: 0, losses: 0, count: 0, profit: 0 },
+            'Other': { wins: 0, losses: 0, count: 0, profit: 0 }
+        };
         this.dayOfWeekStats = {};
         this.dailyStats = {};
         this.monthlyStats = {};
@@ -316,6 +322,17 @@ class TimeObserver extends BaseObserver {
                 this.hourStats[hour].count++;
                 if (adjustedProfit > 0) this.hourStats[hour].wins++;
                 else this.hourStats[hour].losses++;
+                
+                // Session
+                let session = 'Other';
+                if (hour >= 0 && hour < 8) session = 'Asian';
+                else if (hour >= 8 && hour < 14) session = 'London';
+                else if (hour >= 14 && hour < 20) session = 'New York';
+                
+                this.sessionStats[session].count++;
+                this.sessionStats[session].profit += adjustedProfit;
+                if (adjustedProfit > 0) this.sessionStats[session].wins++;
+                else this.sessionStats[session].losses++;
 
                 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
                 const day = dayNames[date.getDay()];
@@ -369,8 +386,20 @@ class TimeObserver extends BaseObserver {
         const dailyValues = Object.values(this.dailyStats).map(s => s.profit);
         const monthlyValues = Object.values(this.monthlyStats).map(s => s.profit);
 
+        const sessions = Object.keys(this.sessionStats).map(key => {
+            const stats = this.sessionStats[key];
+            return {
+                [key]: {
+                    profit: parseFloat(stats.profit.toFixed(2)),
+                    count: stats.count,
+                    winRate: stats.count ? ((stats.wins / stats.count) * 100).toFixed(2) : "0.00"
+                }
+            };
+        });
+
         return {
             hourStats: this.hourStats,
+            sessions,
             dayOfWeekAnalysis,
             daily: this.dailyStats,
             monthly: this.monthlyStats,
@@ -384,10 +413,62 @@ class TimeObserver extends BaseObserver {
     }
 }
 
+class VolatilityObserver extends BaseObserver {
+    constructor(options) {
+        super(options);
+        this.volatilityStats = {
+            'Low Volatility': { wins: 0, losses: 0, count: 0, profit: 0 },
+            'Medium Volatility': { wins: 0, losses: 0, count: 0, profit: 0 },
+            'High Volatility': { wins: 0, losses: 0, count: 0, profit: 0 }
+        };
+    }
+
+    update(trade, currentBalance) {
+        const adjustedProfit = trade.pnl || 0;
+        let slDist = 0;
+        
+        // Try to derive volatility from sl_price distance or risk_percentage
+        if (trade.sl_price && trade.entry_price) {
+            slDist = Math.abs(trade.entry_price - trade.sl_price) / trade.entry_price * 100;
+        } else if (trade.risk_percentage) {
+            slDist = parseFloat(trade.risk_percentage);
+        } else {
+            slDist = 1.0; // fallback medium
+        }
+
+        let cat = 'Medium Volatility';
+        if (slDist < 0.8) cat = 'Low Volatility';
+        else if (slDist > 2.0) cat = 'High Volatility';
+
+        this.volatilityStats[cat].count++;
+        this.volatilityStats[cat].profit += adjustedProfit;
+        if (adjustedProfit > 0) this.volatilityStats[cat].wins++;
+        else this.volatilityStats[cat].losses++;
+    }
+
+    getResult() {
+        const volatility = Object.keys(this.volatilityStats).map(key => {
+            const stats = this.volatilityStats[key];
+            return {
+                [key]: {
+                    profit: parseFloat(stats.profit.toFixed(2)),
+                    count: stats.count,
+                    winRate: stats.count ? ((stats.wins / stats.count) * 100).toFixed(2) : "0.00"
+                }
+            };
+        });
+
+        return {
+            volatility
+        };
+    }
+}
+
 module.exports = {
     TradeSummaryObserver,
     EquityObserver,
     CategoricalObserver,
     TimeObserver,
+    VolatilityObserver,
     parseCustomDate
 };

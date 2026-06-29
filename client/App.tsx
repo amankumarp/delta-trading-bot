@@ -1,13 +1,14 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useStore } from './store';
 import {
   TrendingUp, Activity, Clock, Target, ArrowUpRight, ArrowDownRight, RefreshCcw,
   BrainCircuit, LayoutDashboard, BarChart, List, Zap, ShieldCheck,
   Settings, Eye, DollarSign, Scale, TrendingDown, Layers, Briefcase, Gem,
-  Award, AlertTriangle, Calendar, ChevronRight, PlayCircle, Info, Trash2, PlusCircle, X
+  Award, AlertTriangle, Calendar, ChevronRight, PlayCircle, Info, Trash2, PlusCircle, X, Crosshair
 } from 'lucide-react';
 import { BacktestResponse, IndicatorSettings, Trade, IndicatorConfig } from './types';
-import { ASSET_OPTIONS, INTERVAL_OPTIONS, STRATEGY_OPTIONS, MOCK_RESPONSE } from './constants';
+import { ASSET_OPTIONS, INTERVAL_OPTIONS, STRATEGY_OPTIONS } from './constants';
 import StatCard from './components/StatCard';
 import TradingChart from './components/TradingChart';
 import {
@@ -22,74 +23,66 @@ import {
   MarketTrendEquityChart
 } from './components/DashboardCharts';
 import { getStrategyAnalysis } from './services/geminiService';
+import RobustnessPanel from './components/RobustnessPanel';
+import OptimizationPanel from './components/OptimizationPanel';
+import PaperTradingPanel from './components/PaperTradingPanel';
 
-type TabType = 'backtest' | 'trades' | 'chart';
+type TabType = 'backtest' | 'trades' | 'chart' | 'robustness' | 'optimization' | 'papertrading';
 type AppView = 'config' | 'dashboard';
+const JOURNAL_PAGE_SIZE = 50;
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppView>('config');
-  const [activeTab, setActiveTab] = useState<TabType>('backtest');
-  const [focusedTradeIndex, setFocusedTradeIndex] = useState<number | undefined>();
+  const {
+    view, activeTab, focusedTradeIndex,
+    strategy, symbol, interval, startDateTime, endDateTime, balance, leverage, risk, fee, apiUrl,
+    imbaSensitivity, imbaRiskPercent, imbaTP1Pct, imbaTP1Size, imbaTP2Pct, imbaTP2Size, 
+    imbaTP3Pct, imbaTP3Size, imbaTP4Pct, imbaTP4Size, imbaBreakEven, imbaFixedStop, imbaSLPct,
+    imbaUseRsi, imbaRsiLen, imbaRsiOB, imbaRsiOS,
+    indicatorSettings,
+    loading, data, error, aiInsight, aiLoading, isBackfilling, backfillProgress,
+    setView, setActiveTab, setFocusedTradeIndex, updateParams, removeIndicator, addIndicator, updateIndicator, updateParam,
+    runBacktest, setAiInsight, setAiLoading, setBackfillProgress
+  } = useStore();
+  const [journalPage, setJournalPage] = useState(1);
 
-  // Backtest Parameters
-  const [strategy, setStrategy] = useState(STRATEGY_OPTIONS[0].id);
-  const [symbol, setSymbol] = useState('BTC_USDT');
-  const [interval, setIntervalVal] = useState('15m');
-  const [startDateTime, setStartDateTime] = useState('2025-03-13T00:00');
-  const [endDateTime, setEndDateTime] = useState('2025-07-19T23:59');
-  const [balance, setBalance] = useState('1000000');
-  const [leverage, setLeverage] = useState('50');
-  const [risk, setRisk] = useState('1');
-  const [fee, setFee] = useState('0.05');
-  const [apiUrl, setApiUrl] = useState('http://127.0.0.1:4040');
+  useEffect(() => {
+    // Only connect if we need to track backfilling or live signals globally
+    const wsUrl = apiUrl.replace('http', 'ws') + '/ws/signals';
+    const ws = new WebSocket(wsUrl);
 
-  const [indicatorSettings, setIndicatorSettings] = useState<IndicatorSettings>({
-    indicators: [
-      { id: 'ema-1', type: 'EMA', visible: true, color: '#3b82f6', params: { period: 20 } },
-      { id: 'rsi-1', type: 'RSI', visible: true, color: '#f59e0b', params: { period: 14 } },
-      { id: 'bb-1', type: 'BB', visible: true, color: '#ffffff', params: { period: 20, multiplier: 2.5 } }
-    ]
-  });
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'data_backfilled') {
+          setBackfillProgress(`Backfilling: ${msg.chunkStart} to ${msg.chunkEnd} (${msg.chunksRemaining} chunks left)`, false);
+        } else if (msg.type === 'data_backfilled_complete') {
+          setBackfillProgress(null, true);
+        }
+      } catch (e) {}
+    };
 
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<BacktestResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+    return () => ws.close();
+  }, [apiUrl, setBackfillProgress]);
+
+  const journalTotalPages = Math.max(1, Math.ceil((data?.trades.length || 0) / JOURNAL_PAGE_SIZE));
+  const journalSafePage = Math.min(journalPage, journalTotalPages);
+  const journalStart = (journalSafePage - 1) * JOURNAL_PAGE_SIZE;
+  const journalDisplayStart = data?.trades.length ? journalStart + 1 : 0;
+  const journalDisplayEnd = Math.min(journalStart + JOURNAL_PAGE_SIZE, data?.trades.length || 0);
+  const journalRows = useMemo(() => {
+    return (data?.trades || []).slice(journalStart, journalStart + JOURNAL_PAGE_SIZE);
+  }, [data?.trades, journalStart]);
+
+  useEffect(() => {
+    setJournalPage(1);
+  }, [data]);
+
+  useEffect(() => {
+    if (journalPage !== journalSafePage) setJournalPage(journalSafePage);
+  }, [journalPage, journalSafePage]);
 
   const handleRunBacktest = async () => {
-    setLoading(true);
-    setError(null);
-    setAiInsight(null);
-
-    try {
-      const startUnix = startDateTime ? Math.floor(new Date(startDateTime).getTime() / 1000) : '';
-      const endUnix = endDateTime ? Math.floor(new Date(endDateTime).getTime() / 1000) : '';
-
-      let url = `${apiUrl}/api/analyze?symbol=${symbol}&interval=${interval}&start=${startUnix}&end=${endUnix}&strategy=${strategy}`;
-      if (balance) url += `&balance=${balance}`;
-      if (leverage) url += `&leverage=${leverage}`;
-      if (risk) url += `&risk=${risk}`;
-      if (fee) url += `&fee=${fee}`;
-
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
-      });
-
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const result = await response.json();
-      setData(result);
-      setView('dashboard');
-    } catch (err: any) {
-      console.warn("Falling back to local simulation data.");
-      setData(MOCK_RESPONSE);
-      setView('dashboard');
-      setError("Local Simulation Active: Remote execution unavailable.");
-    } finally {
-      setLoading(false);
-    }
+    await runBacktest();
   };
 
   const jumpToTrade = (index: number) => {
@@ -161,42 +154,7 @@ const App: React.FC = () => {
     };
   }, [data]);
 
-  const removeIndicator = (id: string) => {
-    setIndicatorSettings(prev => ({
-      indicators: prev.indicators.filter(i => i.id !== id)
-    }));
-  };
 
-  const addIndicator = (type: IndicatorConfig['type']) => {
-    const id = `${type.toLowerCase()}-${Date.now()}`;
-    const colors: Record<string, string> = { EMA: '#3b82f6', BB: '#ffffff', RSI: '#f59e0b', MACD: '#8b5cf6' };
-    const params: Record<string, any> = {
-      EMA: { period: 20 },
-      BB: { period: 20, multiplier: 2 },
-      RSI: { period: 14 },
-      MACD: { fast: 12, slow: 26, signal: 9 }
-    };
-    const newIndicator: IndicatorConfig = {
-      id,
-      type,
-      visible: true,
-      color: colors[type],
-      params: params[type]
-    };
-    setIndicatorSettings(prev => ({ indicators: [...prev.indicators, newIndicator] }));
-  };
-
-  const updateIndicator = (id: string, updates: Partial<IndicatorConfig>) => {
-    setIndicatorSettings(prev => ({
-      indicators: prev.indicators.map(i => i.id === id ? { ...i, ...updates } : i)
-    }));
-  };
-
-  const updateParam = (id: string, paramKey: string, val: number) => {
-    setIndicatorSettings(prev => ({
-      indicators: prev.indicators.map(i => i.id === id ? { ...i, params: { ...i.params, [paramKey]: val } } : i)
-    }));
-  };
 
   const generateAiReport = async () => {
     if (!data?.analysis) return;
@@ -232,7 +190,7 @@ const App: React.FC = () => {
                 {STRATEGY_OPTIONS.map((opt) => (
                   <button
                     key={opt.id}
-                    onClick={() => setStrategy(opt.id)}
+                    onClick={() => updateParams({ strategy: opt.id })}
                     className={`w-full text-left p-6 rounded-2xl border transition-all duration-300 relative group ${strategy === opt.id
                       ? 'bg-emerald-500/10 border-emerald-500 shadow-2xl'
                       : 'bg-white/5 border-white/10 hover:border-white/20'
@@ -240,7 +198,7 @@ const App: React.FC = () => {
                   >
                     <div className="flex items-center gap-4">
                       <div className={`p-3 rounded-xl ${strategy === opt.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>
-                        {opt.icon === 'Zap' ? <Zap className="w-6 h-6" /> : <Activity className="w-6 h-6" />}
+                      {opt.icon === 'Zap' ? <Zap className="w-6 h-6" /> : opt.icon === 'Crosshair' ? <Crosshair className="w-6 h-6" /> : opt.icon === 'TrendingUp' ? <TrendingUp className="w-6 h-6" /> : <Activity className="w-6 h-6" />}
                       </div>
                       <div>
                         <h3 className="font-black text-sm uppercase tracking-widest">{opt.name}</h3>
@@ -252,21 +210,21 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] space-y-6">
+            <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] space-y-6 flex flex-col">
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-emerald-500 flex items-center gap-3">
                 <Target className="w-5 h-5" /> Constraints Lab
               </h2>
-              <div className="space-y-5">
+              <div className="space-y-5 flex-1 overflow-y-auto custom-scrollbar pr-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Asset Pair</label>
-                    <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all cursor-pointer">
+                    <select value={symbol} onChange={(e) => updateParams({ symbol: e.target.value })} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all cursor-pointer">
                       {ASSET_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Resolution</label>
-                    <select value={interval} onChange={(e) => setIntervalVal(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all cursor-pointer">
+                    <select value={interval} onChange={(e) => updateParams({ interval: e.target.value })} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all cursor-pointer">
                       {INTERVAL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </div>
@@ -275,19 +233,19 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Initial Balance ($)</label>
-                    <input type="number" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="e.g. 10000" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
+                    <input type="number" value={balance} onChange={(e) => updateParams({ balance: e.target.value })} placeholder="e.g. 10000" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Leverage (x)</label>
-                    <input type="number" value={leverage} onChange={(e) => setLeverage(e.target.value)} placeholder="e.g. 200" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
+                    <input type="number" value={leverage} onChange={(e) => updateParams({ leverage: e.target.value })} placeholder="e.g. 200" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Risk/Trade (%)</label>
-                    <input type="number" value={risk} onChange={(e) => setRisk(e.target.value)} placeholder="e.g. 1" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
+                    <input type="number" value={risk} onChange={(e) => updateParams({ risk: e.target.value })} placeholder="e.g. 1" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Fee (%)</label>
-                    <input type="number" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="e.g. 0.01" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
+                    <input type="number" step="0.01" value={fee} onChange={(e) => updateParams({ fee: e.target.value })} placeholder="e.g. 0.01" className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none transition-all placeholder:text-slate-700" />
                   </div>
                 </div>
 
@@ -296,22 +254,143 @@ const App: React.FC = () => {
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <label className="text-[8px] font-black text-slate-600 uppercase flex items-center gap-2"><Calendar className="w-3 h-3" /> Start Boundary</label>
-                      <input type="datetime-local" value={startDateTime} onChange={(e) => setStartDateTime(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                      <input type="datetime-local" value={startDateTime} onChange={(e) => updateParams({ startDateTime: e.target.value })} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[8px] font-black text-slate-600 uppercase flex items-center gap-2"><Calendar className="w-3 h-3" /> End Boundary</label>
-                      <input type="datetime-local" value={endDateTime} onChange={(e) => setEndDateTime(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                      <input type="datetime-local" value={endDateTime} onChange={(e) => updateParams({ endDateTime: e.target.value })} className="w-full bg-slate-900 border border-white/10 rounded-xl p-3.5 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
                     </div>
                   </div>
                 </div>
 
+                {/* ── IMBA ALGO Settings Panel ─────────────────────────── */}
+                {strategy === 'imba-algo' && (
+                  <div className="space-y-5 border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-5 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">IMBA ALGO Settings</span>
+                    </div>
+
+                    {/* Sensitivity + Risk */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Sensitivity</label>
+                        <input type="number" step="0.1" value={imbaSensitivity} onChange={e => updateParams({ imbaSensitivity: e.target.value })}
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Risk %</label>
+                        <input type="number" step="0.1" value={imbaRiskPercent} onChange={e => updateParams({ imbaRiskPercent: e.target.value })}
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                      </div>
+                    </div>
+
+                    {/* Take Profits */}
+                    <div className="space-y-2">
+                      <div className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Take Profits (% move / % position closed)</div>
+                      {[
+                        { label:'TP 1', pct: imbaTP1Pct, pctKey: 'imbaTP1Pct', size: imbaTP1Size, sizeKey: 'imbaTP1Size' },
+                        { label:'TP 2', pct: imbaTP2Pct, pctKey: 'imbaTP2Pct', size: imbaTP2Size, sizeKey: 'imbaTP2Size' },
+                        { label:'TP 3', pct: imbaTP3Pct, pctKey: 'imbaTP3Pct', size: imbaTP3Size, sizeKey: 'imbaTP3Size' },
+                        { label:'TP 4', pct: imbaTP4Pct, pctKey: 'imbaTP4Pct', size: imbaTP4Size, sizeKey: 'imbaTP4Size' },
+                      ].map(({ label, pct, pctKey, size, sizeKey }) => (
+                        <div key={label} className="grid grid-cols-3 gap-2 items-center">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+                          <div className="space-y-0.5">
+                            <label className="text-[7px] text-slate-600 uppercase font-black">Move %</label>
+                            <input type="number" step="0.05" value={pct} onChange={e => updateParams({ [pctKey]: e.target.value })}
+                              className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white focus:border-emerald-500 outline-none" />
+                          </div>
+                          <div className="space-y-0.5">
+                            <label className="text-[7px] text-slate-600 uppercase font-black">Size %</label>
+                            <input type="number" step="5" value={size} onChange={e => updateParams({ [sizeKey]: e.target.value })}
+                              className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white focus:border-emerald-500 outline-none" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Break-Even Target */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Break-Even After</label>
+                        <select value={imbaBreakEven} onChange={e => updateParams({ imbaBreakEven: e.target.value })}
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none cursor-pointer">
+                          <option value="1">TP 1</option>
+                          <option value="2">TP 2</option>
+                          <option value="3">TP 3</option>
+                          <option value="WITHOUT">Without</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">SL % (if fixed)</label>
+                        <input type="number" step="0.1" value={imbaSLPct} onChange={e => updateParams({ imbaSLPct: e.target.value })}
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                      </div>
+                    </div>
+
+                    {/* Toggles */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => updateParams({ imbaFixedStop: !imbaFixedStop })}
+                        className={`flex items-center justify-between p-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+                          imbaFixedStop ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'
+                        }`}
+                      >
+                        Fixed SL
+                        <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          imbaFixedStop ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+                        }`}>
+                          {imbaFixedStop && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => updateParams({ imbaUseRsi: !imbaUseRsi })}
+                        className={`flex items-center justify-between p-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+                          imbaUseRsi ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'
+                        }`}
+                      >
+                        RSI Filter
+                        <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          imbaUseRsi ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+                        }`}>
+                          {imbaUseRsi && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* RSI params (only when filter is enabled) */}
+                    {imbaUseRsi && (
+                      <div className="grid grid-cols-3 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">RSI Len</label>
+                          <input type="number" value={imbaRsiLen} onChange={e => updateParams({ imbaRsiLen: e.target.value })}
+                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Overbought</label>
+                          <input type="number" value={imbaRsiOB} onChange={e => updateParams({ imbaRsiOB: e.target.value })}
+                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Oversold</label>
+                          <input type="number" value={imbaRsiOS} onChange={e => updateParams({ imbaRsiOS: e.target.value })}
+                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   onClick={handleRunBacktest}
-                  disabled={loading}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4.5 rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all shadow-2xl shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] mt-4"
+                  disabled={loading || isBackfilling}
+                  className={`w-full text-white py-4.5 rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all shadow-2xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] mt-4 ${
+                    isBackfilling ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
+                  }`}
                 >
-                  {loading ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
-                  {loading ? 'Synthesizing...' : 'Run Simulation'}
+                  {loading || isBackfilling ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
+                  {loading ? 'Synthesizing...' : isBackfilling ? 'Backfilling Data...' : 'Run Simulation'}
                 </button>
               </div>
             </div>
@@ -323,6 +402,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30">
+      {isBackfilling && (
+        <div className="bg-amber-500 text-amber-950 px-4 py-2 text-center text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+          <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+          {backfillProgress || 'Backfilling Historical Data in Background...'}
+        </div>
+      )}
       <header className="sticky top-0 z-50 bg-[#0a0f1d]/95 backdrop-blur-xl border-b border-white/5 p-4 px-6">
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setView('config')}>
@@ -432,6 +517,15 @@ const App: React.FC = () => {
           <button onClick={() => setActiveTab('chart')} className={`py-4 text-[11px] font-black uppercase tracking-[0.2em] border-b-2 transition-all flex items-center gap-2 ${activeTab === 'chart' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
             <BarChart className="w-4 h-4" /> VISUALIZER
           </button>
+          <button onClick={() => setActiveTab('robustness')} className={`py-4 text-[11px] font-black uppercase tracking-[0.2em] border-b-2 transition-all flex items-center gap-2 ${activeTab === 'robustness' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+            <ShieldCheck className="w-4 h-4" /> ROBUSTNESS
+          </button>
+          <button onClick={() => setActiveTab('optimization')} className={`py-4 text-[11px] font-black uppercase tracking-[0.2em] border-b-2 transition-all flex items-center gap-2 ${activeTab === 'optimization' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+            <Zap className="w-4 h-4" /> OPTIMIZER
+          </button>
+          <button onClick={() => setActiveTab('papertrading')} className={`py-4 text-[11px] font-black uppercase tracking-[0.2em] border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papertrading' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+            <Activity className="w-4 h-4" /> PAPER TRADING
+          </button>
         </div>
       </div>
 
@@ -441,7 +535,14 @@ const App: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-1">
                 <h2 className="text-4xl font-black uppercase tracking-tighter italic">Performance Overview</h2>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em]">Synthetic Alpha Verification v5.2</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em]">Synthetic Alpha Verification v5.2</p>
+                  {isBackfilling && (
+                    <span className="bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-amber-500/20">
+                      Partial Data (Backfilling...)
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex gap-10">
                 <div className="text-right">
@@ -545,8 +646,15 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-black uppercase tracking-tighter italic">Execution Journal</h2>
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Full Temporal Audit of Signal Events</p>
               </div>
-              <div className="bg-emerald-500/10 border border-emerald-500/20 px-6 py-2.5 rounded-2xl">
-                <span className="text-[11px] font-black text-emerald-500 uppercase tracking-widest">{data.trades.length} Verified Events</span>
+              <div className="flex items-center gap-3">
+                <div className="bg-white/5 border border-white/10 px-5 py-2.5 rounded-2xl">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {journalDisplayStart}-{journalDisplayEnd} of {data.trades.length}
+                  </span>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/20 px-6 py-2.5 rounded-2xl">
+                  <span className="text-[11px] font-black text-emerald-500 uppercase tracking-widest">{data.trades.length} Verified Events</span>
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -561,8 +669,12 @@ const App: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
-                  {data.trades.map((trade, i) => (
-                    <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                  {journalRows.map((trade, i) => {
+                    const tradeIndex = journalStart + i;
+                    const profitStr = trade.profit || trade.avg_profit || '0';
+                    const profitVal = parseFloat(profitStr);
+                    return (
+                    <tr key={tradeIndex} className="hover:bg-white/[0.02] transition-colors group">
                       <td className="px-10 py-10">
                         <span className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest ${trade.isLong ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
                           {trade.isLong ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
@@ -578,17 +690,52 @@ const App: React.FC = () => {
                         <div className="text-[10px] text-slate-600 font-black uppercase tracking-widest mt-2">{trade.exit_time}</div>
                       </td>
                       <td className="px-10 py-10 text-right">
-                        <div className={`text-2xl font-black tracking-tighter ${parseFloat(trade.profit) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {parseFloat(trade.profit) > 0 ? '+' : ''}{trade.profit}%
+                        <div className={`text-2xl font-black tracking-tighter ${profitVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {profitVal >= 0 ? '+' : ''}{profitVal.toFixed(2)}%
                         </div>
                       </td>
                       <td className="px-10 py-10 text-center">
-                        <button onClick={() => jumpToTrade(i)} className="p-4 bg-slate-800 hover:bg-emerald-500 rounded-2xl transition-all shadow-lg group-hover:shadow-emerald-500/20"><Eye className="w-5 h-5" /></button>
+                        <button onClick={() => jumpToTrade(tradeIndex)} className="p-4 bg-slate-800 hover:bg-emerald-500 rounded-2xl transition-all shadow-lg group-hover:shadow-emerald-500/20"><Eye className="w-5 h-5" /></button>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
+            </div>
+            <div className="border-t border-white/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#050912]">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                Page {journalSafePage} / {journalTotalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setJournalPage(1)}
+                  disabled={journalSafePage <= 1}
+                  className="px-4 py-2 bg-white/5 disabled:opacity-30 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 transition-all"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setJournalPage((p) => Math.max(1, p - 1))}
+                  disabled={journalSafePage <= 1}
+                  className="px-4 py-2 bg-white/5 disabled:opacity-30 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 transition-all"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setJournalPage((p) => Math.min(journalTotalPages, p + 1))}
+                  disabled={journalSafePage >= journalTotalPages}
+                  className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 disabled:opacity-30 hover:bg-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-400 transition-all"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setJournalPage(journalTotalPages)}
+                  disabled={journalSafePage >= journalTotalPages}
+                  className="px-4 py-2 bg-white/5 disabled:opacity-30 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 transition-all"
+                >
+                  Last
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -599,6 +746,69 @@ const App: React.FC = () => {
               <TradingChart candles={data.candles} trades={data.trades} focusedTradeId={focusedTradeIndex} indicatorSettings={indicatorSettings} />
             </div>
           </div>
+        )}
+
+        {activeTab === 'robustness' && (
+          <RobustnessPanel
+            apiUrl={apiUrl}
+            symbol={symbol}
+            interval={interval}
+            startUnix={startDateTime ? String(Math.floor(new Date(startDateTime).getTime() / 1000)) : ''}
+            endUnix={endDateTime ? String(Math.floor(new Date(endDateTime).getTime() / 1000)) : ''}
+            imbaParams={`&strategy=${strategy}` + (strategy === 'imba-algo'
+              ? `&sensitivity=${imbaSensitivity}&riskPercent=${imbaRiskPercent}&tp1Pct=${imbaTP1Pct}&tp1SizePct=${imbaTP1Size}&tp2Pct=${imbaTP2Pct}&tp2SizePct=${imbaTP2Size}&tp3Pct=${imbaTP3Pct}&tp3SizePct=${imbaTP3Size}&tp4Pct=${imbaTP4Pct}&tp4SizePct=${imbaTP4Size}&breakEvenTarget=${imbaBreakEven}&fixedStop=${imbaFixedStop}&slPercent=${imbaSLPct}`
+              : '')}
+          />
+        )}
+
+        {activeTab === 'optimization' && (
+          <OptimizationPanel
+            apiUrl={apiUrl}
+            baseParams={`strategy=${strategy}&symbol=${symbol}&interval=${interval}&start=${startDateTime ? String(Math.floor(new Date(startDateTime).getTime() / 1000)) : ''}&end=${endDateTime ? String(Math.floor(new Date(endDateTime).getTime() / 1000)) : ''}${strategy === 'imba-algo' ? `&sensitivity=${imbaSensitivity}&riskPercent=${imbaRiskPercent}&tp1Pct=${imbaTP1Pct}&tp1SizePct=${imbaTP1Size}&tp2Pct=${imbaTP2Pct}&tp2SizePct=${imbaTP2Size}&tp3Pct=${imbaTP3Pct}&tp3SizePct=${imbaTP3Size}&tp4Pct=${imbaTP4Pct}&tp4SizePct=${imbaTP4Size}&breakEvenTarget=${imbaBreakEven}&fixedStop=${imbaFixedStop}&slPercent=${imbaSLPct}` : ''}`}
+            onApplyParams={(p) => {
+              if (p.sensitivity !== undefined) updateParams({ imbaSensitivity: p.sensitivity.toString() });
+              if (p.tp1Pct !== undefined) updateParams({ imbaTP1Pct: p.tp1Pct.toString() });
+              if (p.tp2Pct !== undefined) updateParams({ imbaTP2Pct: p.tp2Pct.toString() });
+              if (p.tp3Pct !== undefined) updateParams({ imbaTP3Pct: p.tp3Pct.toString() });
+              if (p.tp4Pct !== undefined) updateParams({ imbaTP4Pct: p.tp4Pct.toString() });
+              if (p.tp1SizePct !== undefined) updateParams({ imbaTP1Size: p.tp1SizePct.toString() });
+              if (p.tp2SizePct !== undefined) updateParams({ imbaTP2Size: p.tp2SizePct.toString() });
+              if (p.tp3SizePct !== undefined) updateParams({ imbaTP3Size: p.tp3SizePct.toString() });
+              if (p.tp4SizePct !== undefined) updateParams({ imbaTP4Size: p.tp4SizePct.toString() });
+              if (p.breakEvenTarget !== undefined) updateParams({ imbaBreakEven: p.breakEvenTarget.toString() });
+              if (p.slPercent !== undefined) updateParams({ imbaSLPct: p.slPercent.toString() });
+            }}
+          />
+        )}
+
+        {activeTab === 'papertrading' && (
+          <PaperTradingPanel
+            apiUrl={apiUrl}
+            config={{
+              symbol,
+              interval,
+              strategy,
+              balance: parseFloat(balance),
+              leverage: parseFloat(leverage),
+              fee: parseFloat(fee),
+              risk: parseFloat(risk),
+              params: strategy === 'imba-algo' ? {
+                sensitivity: imbaSensitivity,
+                riskPercent: imbaRiskPercent,
+                tp1Pct: imbaTP1Pct,
+                tp1SizePct: imbaTP1Size,
+                tp2Pct: imbaTP2Pct,
+                tp2SizePct: imbaTP2Size,
+                tp3Pct: imbaTP3Pct,
+                tp3SizePct: imbaTP3Size,
+                tp4Pct: imbaTP4Pct,
+                tp4SizePct: imbaTP4Size,
+                breakEvenTarget: imbaBreakEven,
+                fixedStop: imbaFixedStop,
+                slPercent: imbaSLPct
+              } : {}
+            }}
+          />
         )}
       </main>
 
