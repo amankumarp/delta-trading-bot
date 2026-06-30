@@ -53,10 +53,14 @@ class BacktestEngine {
                 partial_pnl = ((positionSize * 0.5) * partialRawProfit / 100) - (totalCost * 0.5);
             }
 
-            // Attach pnl and qnt to a copy of the trade
+            // Calculate cost-adjusted percentage return for Sharpe and other ratios
+            const adjustedProfitPct = positionSize !== 0 ? (pnl / positionSize) * 100 : 0;
+
+            // Attach pnl, qnt, and adjusted profit to a copy of the trade
             const processedTrade = {
                 ...trade,
                 pnl: parseFloat(pnl.toFixed(2)),
+                adjusted_profit_pct: parseFloat(adjustedProfitPct.toFixed(4)),
                 feePaid: parseFloat(totalCost.toFixed(2)),
                 qnt: parseFloat(qnt.toFixed(4)),
                 ...(partial_exit_qnt && { partial_exit_qnt: parseFloat(partial_exit_qnt.toFixed(4)) }),

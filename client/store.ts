@@ -51,6 +51,10 @@ interface AppState {
   robustnessStep: string;
   robustnessTcMaxMultiplier: string;
   robustnessTcStep: string;
+  robustnessMcMethod: string;
+  robustnessSeed: string;
+  robustnessNumThreads: string;
+  robustnessBlockSize: string;
 
   // Optimization Settings
   optimizeTopN: string;
@@ -132,6 +136,10 @@ export const useStore = create<AppState>()(
       robustnessStep: '0.1',
       robustnessTcMaxMultiplier: '20',
       robustnessTcStep: '0.5',
+      robustnessMcMethod: 'bootstrap',
+      robustnessSeed: '12345',
+      robustnessNumThreads: '4',
+      robustnessBlockSize: '',
 
       optimizeTopN: '10',
       optimizeMinTrades: '5',
@@ -310,6 +318,10 @@ export const useStore = create<AppState>()(
         robustnessTrainPct: state.robustnessTrainPct,
         robustnessWindows: state.robustnessWindows,
         robustnessStep: state.robustnessStep,
+        robustnessMcMethod: state.robustnessMcMethod,
+        robustnessSeed: state.robustnessSeed,
+        robustnessNumThreads: state.robustnessNumThreads,
+        robustnessBlockSize: state.robustnessBlockSize,
         optimizeTopN: state.optimizeTopN,
         optimizeMinTrades: state.optimizeMinTrades,
         indicatorSettings: state.indicatorSettings

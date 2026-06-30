@@ -163,7 +163,21 @@ class PaperEngine {
         let currentBalance = deployment.balance;
 
         for (const t of processedTrades) {
-            const entryTimeSecs = Math.floor(new Date(t.entry_time).getTime() / 1000);
+            let entryTimeSecs = 0;
+            if (/^\d+$/.test(t.entry_time)) {
+                entryTimeSecs = parseInt(t.entry_time, 10);
+            } else if (typeof t.entry_time === 'string' && t.entry_time.includes('/')) {
+                // DD/MM/YYYY, HH:mm:ss or similar
+                const match = t.entry_time.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+                if (match) {
+                    entryTimeSecs = Math.floor(new Date(match[3], match[2] - 1, match[1], match[4], match[5], match[6]).getTime() / 1000);
+                } else {
+                    entryTimeSecs = Math.floor(new Date(t.entry_time).getTime() / 1000);
+                }
+            } else {
+                entryTimeSecs = Math.floor(new Date(t.entry_time).getTime() / 1000);
+            }
+            
             if (entryTimeSecs >= deployment.deployed_at) {
                 t.profit = t.pnl || 0;
                 t.profitPct = t.avg_profit || 0;

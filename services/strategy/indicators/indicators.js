@@ -224,7 +224,9 @@ function calculateRSI(prices, period = 14) {
 function calculateStdDev(prices, period) {
     return prices.map((_, i, arr) => {
         if (i < period - 1) return null;
-        return math.std(arr.slice(i - period + 1, i + 1));
+        const slice = arr.slice(i - period + 1, i + 1);
+        if (slice.some(v => v === null || v === undefined || Number.isNaN(v))) return null;
+        return math.std(slice);
     });
 }
 

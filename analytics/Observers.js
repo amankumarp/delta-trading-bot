@@ -94,7 +94,12 @@ class TradeSummaryObserver extends BaseObserver {
         const avgRMultiple = this.totalTrades > 0 ? (this.rMultiples.reduce((a, b) => a + b, 0) / this.totalTrades).toFixed(2) : "N/A";
 
         // Standard Ratios using percentage returns for accuracy
-        const returns = trades.map(t => parseFloat(t.avg_profit) || 0);
+        // Fallback to avg_profit if adjusted_profit_pct is undefined (e.g. legacy compatibility)
+        const returns = trades.map(t => {
+            if (t.adjusted_profit_pct !== undefined) return parseFloat(t.adjusted_profit_pct);
+            return parseFloat(t.avg_profit) || 0;
+        });
+        
         if (returns.length === 0) return {
             totalTrades: 0,
             winRate: "0.00",
@@ -115,8 +120,23 @@ class TradeSummaryObserver extends BaseObserver {
             totalFees: "0.00",
             stoplossTouched: 0,
             avgWin: "0.00",
-            avgLoss: "0.00"
+            avgLoss: "0.00",
+            cagr: "N/A",
+            annualReturn: "N/A"
         };
+
+        // Determine elapsed days dynamically
+        let totalDays = 1;
+        if (trades && trades.length > 1) {
+            const firstDate = parseCustomDate(trades[0].entry_time) || new Date(trades[0].entry_time);
+            const lastDate = parseCustomDate(trades[trades.length - 1].exit_time) || new Date(trades[trades.length - 1].exit_time);
+            
+            if (firstDate && lastDate && !isNaN(firstDate) && !isNaN(lastDate)) {
+                totalDays = Math.max((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24), 1);
+            }
+        }
+        this.totalDays = totalDays;
+
 
         const meanReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
         const varianceReturn = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;

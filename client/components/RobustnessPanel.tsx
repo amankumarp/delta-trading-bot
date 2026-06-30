@@ -15,15 +15,15 @@ interface Props {
 }
 
 const VERDICT_CONFIG: Record<string, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
-  robust:                { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Robust' },
-  highly_robust:         { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Highly Robust' },
-  edge_confirmed:        { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Edge Confirmed' },
-  no_statistical_edge:   { color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    icon: <XCircle className="w-5 h-5" />,       label: 'No Statistical Edge' },
-  moderate_degradation:  { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   icon: <AlertTriangle className="w-5 h-5" />, label: 'Moderate Degradation' },
-  likely_overfit:        { color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    icon: <XCircle className="w-5 h-5" />,       label: 'Likely Overfit' },
-  mixed:                 { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   icon: <AlertTriangle className="w-5 h-5" />, label: 'Mixed' },
-  fragile:               { color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    icon: <XCircle className="w-5 h-5" />,       label: 'Fragile Parameters' },
-  moderate:              { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   icon: <AlertTriangle className="w-5 h-5" />, label: 'Moderate Sensitivity' },
+  robust: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Robust' },
+  highly_robust: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Highly Robust' },
+  edge_confirmed: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Edge Confirmed' },
+  no_statistical_edge: { color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30', icon: <XCircle className="w-5 h-5" />, label: 'No Statistical Edge' },
+  moderate_degradation: { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', icon: <AlertTriangle className="w-5 h-5" />, label: 'Moderate Degradation' },
+  likely_overfit: { color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30', icon: <XCircle className="w-5 h-5" />, label: 'Likely Overfit' },
+  mixed: { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', icon: <AlertTriangle className="w-5 h-5" />, label: 'Mixed' },
+  fragile: { color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30', icon: <XCircle className="w-5 h-5" />, label: 'Fragile Parameters' },
+  moderate: { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', icon: <AlertTriangle className="w-5 h-5" />, label: 'Moderate Sensitivity' },
 };
 
 function VerdictBadge({ verdict }: { verdict: string }) {
@@ -61,11 +61,12 @@ const SectionCard: React.FC<{ title: string; icon: React.ReactNode; children: Re
 
 // ── Monte Carlo Panel ──────────────────────────────────────────────────────────
 function MonteCarloView({ data }: { data: any }) {
-  const histData = (data.histogram || []).map((b: any) => ({ name: `$${Math.round(b.lo/1000)}k`, count: b.count }));
+  const { robustnessDropoutRate, robustnessNoiseLevel } = useStore();
+  const histData = (data.histogram || []).map((b: any) => ({ name: `$${Math.round(b.lo / 1000)}k`, count: b.count }));
   const ddHistData = (data.ddHistogram || []).map((b: any) => ({ name: b.label, count: b.count }));
   const sharpeHistData = (data.sharpeHistogram || []).map((b: any) => ({ name: b.label, count: b.count }));
   const ciData = [
-    { p: 'p5',  final: data.finalBalance?.p5,  dd: data.maxDrawdownPct?.p5,  ret: data.totalReturnPct?.p5, sharpe: data.sharpeRatio?.p5 },
+    { p: 'p5', final: data.finalBalance?.p5, dd: data.maxDrawdownPct?.p5, ret: data.totalReturnPct?.p5, sharpe: data.sharpeRatio?.p5 },
     { p: 'p25', final: data.finalBalance?.p25, dd: data.maxDrawdownPct?.p25, ret: data.totalReturnPct?.p25, sharpe: data.sharpeRatio?.p25 },
     { p: 'p50', final: data.finalBalance?.p50, dd: data.maxDrawdownPct?.p50, ret: data.totalReturnPct?.p50, sharpe: data.sharpeRatio?.p50 },
     { p: 'p75', final: data.finalBalance?.p75, dd: data.maxDrawdownPct?.p75, ret: data.totalReturnPct?.p75, sharpe: data.sharpeRatio?.p75 },
@@ -76,7 +77,9 @@ function MonteCarloView({ data }: { data: any }) {
     <div className="space-y-6">
       <div className="flex items-center gap-2 mb-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-xl w-fit">
         <Activity className="w-4 h-4" />
-        <span className="text-[10px] font-black uppercase tracking-widest">Stress Testing Active: Up to 20% Missed Trades, 5% Execution Noise</span>
+        <span className="text-[10px] font-black uppercase tracking-widest">
+          Stress Testing Active: Up to {parseFloat(robustnessDropoutRate) * 100}% Missed Trades, {parseFloat(robustnessNoiseLevel) * 100}% Execution Noise
+        </span>
       </div>
 
       <div className="flex flex-wrap gap-4 items-center">
@@ -117,7 +120,7 @@ function MonteCarloView({ data }: { data: any }) {
             <span className="text-sm font-black text-rose-400">{data.totalReturnPct?.p5?.toFixed(1)}%</span>
           </div>
         </div>
-        
+
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-4 h-4 text-emerald-500" />
@@ -144,7 +147,7 @@ function MonteCarloView({ data }: { data: any }) {
             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#475569' }} />
             <YAxis tick={{ fontSize: 9, fill: '#475569' }} />
             <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 12, fontSize: 11 }} />
-            <Bar dataKey="count" fill="#10b981" radius={[4,4,0,0]} />
+            <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
@@ -202,7 +205,7 @@ function MonteCarloView({ data }: { data: any }) {
             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 8, fontSize: 11 }} itemStyle={{ color: '#3b82f6' }} cursor={{ fill: '#ffffff0a' }} />
-            <Bar dataKey="count" fill="#3b82f6" radius={[2,2,0,0]} />
+            <Bar dataKey="count" fill="#3b82f6" radius={[2, 2, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
@@ -216,7 +219,7 @@ function MonteCarloView({ data }: { data: any }) {
             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 8, fontSize: 11 }} itemStyle={{ color: '#3b82f6' }} cursor={{ fill: '#ffffff0a' }} />
-            <Bar dataKey="count" fill="#3b82f6" radius={[2,2,0,0]} />
+            <Bar dataKey="count" fill="#3b82f6" radius={[2, 2, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
@@ -245,10 +248,10 @@ function MonteCarloView({ data }: { data: any }) {
 function ISOOSView({ data }: { data: any }) {
   const is = data.inSample, oos = data.outOfSample;
   const bars = [
-    { name: 'Win Rate', IS: parseFloat(is?.winRate||0), OOS: parseFloat(oos?.winRate||0) },
-    { name: 'Prof Factor', IS: parseFloat(is?.profitFactor||0), OOS: parseFloat(oos?.profitFactor||0) },
-    { name: 'Sharpe', IS: parseFloat(is?.sharpeRatio||0), OOS: parseFloat(oos?.sharpeRatio||0) },
-    { name: 'Recovery', IS: parseFloat(is?.recoveryFactor||0), OOS: parseFloat(oos?.recoveryFactor||0) },
+    { name: 'Win Rate', IS: parseFloat(is?.winRate || 0), OOS: parseFloat(oos?.winRate || 0) },
+    { name: 'Prof Factor', IS: parseFloat(is?.profitFactor || 0), OOS: parseFloat(oos?.profitFactor || 0) },
+    { name: 'Sharpe', IS: parseFloat(is?.sharpeRatio || 0), OOS: parseFloat(oos?.sharpeRatio || 0) },
+    { name: 'Recovery', IS: parseFloat(is?.recoveryFactor || 0), OOS: parseFloat(oos?.recoveryFactor || 0) },
   ];
 
   return (
@@ -272,8 +275,8 @@ function ISOOSView({ data }: { data: any }) {
             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#475569' }} />
             <YAxis tick={{ fontSize: 9, fill: '#475569' }} />
             <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 12, fontSize: 11 }} />
-            <Bar dataKey="IS" name="In-Sample" fill="#10b981" radius={[4,4,0,0]} />
-            <Bar dataKey="OOS" name="Out-of-Sample" fill="#6366f1" radius={[4,4,0,0]} />
+            <Bar dataKey="IS" name="In-Sample" fill="#10b981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="OOS" name="Out-of-Sample" fill="#6366f1" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
@@ -329,8 +332,8 @@ function WalkForwardView({ data }: { data: any }) {
             <YAxis tick={{ fontSize: 9, fill: '#475569' }} />
             <ReferenceLine y={0} stroke="#334155" />
             <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 12, fontSize: 11 }} />
-            <Bar dataKey="IS" name="In-Sample" fill="#10b981" radius={[4,4,0,0]} />
-            <Bar dataKey="OOS" name="Out-of-Sample" fill="#6366f1" radius={[4,4,0,0]} />
+            <Bar dataKey="IS" name="In-Sample" fill="#10b981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="OOS" name="Out-of-Sample" fill="#6366f1" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
@@ -352,9 +355,9 @@ function WalkForwardView({ data }: { data: any }) {
             {windows.map((w: any) => (
               <tr key={w.window} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
                 <td className="py-3 font-black text-emerald-400">
-                   W{w.window}
-                   {w.window === data.bestWindow && <span className="ml-2 text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded uppercase">Best</span>}
-                   {w.window === data.worstWindow && <span className="ml-2 text-[8px] bg-rose-500/20 text-rose-400 px-1 py-0.5 rounded uppercase">Worst</span>}
+                  W{w.window}
+                  {w.window === data.bestWindow && <span className="ml-2 text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded uppercase">Best</span>}
+                  {w.window === data.worstWindow && <span className="ml-2 text-[8px] bg-rose-500/20 text-rose-400 px-1 py-0.5 rounded uppercase">Worst</span>}
                 </td>
                 <td className="py-3 text-right text-slate-400">{w.isTrades}</td>
                 <td className="py-3 text-right text-slate-400">{w.oosTrades}</td>
@@ -413,7 +416,7 @@ function SensitivityView({ data }: { data: any }) {
             <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: '#475569' }} width={80} />
             <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 12, fontSize: 11 }}
               formatter={(v: any) => [`${v.toFixed(1)}%`, 'Sensitivity']} />
-            <Bar dataKey="sensitivity" radius={[0,4,4,0]}>
+            <Bar dataKey="sensitivity" radius={[0, 4, 4, 0]}>
               {barData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
             </Bar>
           </BarChart>
@@ -448,6 +451,22 @@ function SensitivityView({ data }: { data: any }) {
           </tbody>
         </table>
       </div>
+
+      {data.interactions && data.interactions.length > 0 && (
+        <SectionCard title="Parameter Interaction Matrix" icon={<Layers className="w-4 h-4"/>}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {data.interactions.map((int: any, i: number) => (
+              <MetricRow 
+                key={i} 
+                label={int.pair} 
+                value={`${int.interactionType}`} 
+                sub={`Exp: ${int.expectedDrop} | Act: ${int.actualDrop}`}
+                tooltip="Interaction type (Synergistic, Antagonistic, Linear) based on combined performance drop vs sum of individual drops"
+              />
+            ))}
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
@@ -474,7 +493,7 @@ function TransactionCostView({ data }: { data: any }) {
           </AreaChart>
         </ResponsiveContainer>
       </SectionCard>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -508,35 +527,42 @@ function StatisticalTestsView({ data }: { data: any }) {
   if (!data) return null;
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-4 items-center">
-        <VerdictBadge verdict={data.verdict} />
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-4 items-center">
+          <VerdictBadge verdict={data.verdict} />
+        </div>
+        {data.explanation && (
+          <p className="text-xs text-slate-400 italic bg-white/5 border border-white/10 p-3 rounded-lg leading-relaxed">
+            {data.explanation}
+          </p>
+        )}
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <SectionCard title="Significance & Edge" icon={<BarChart2 className="w-4 h-4" />}>
-           <MetricRow label="T-Statistic" value={data.tTest?.tStat} tooltip="T-stat against 0 mean return" />
-           <MetricRow label="P-Value" value={data.tTest?.pValueEstimate} tooltip="P-Value of T-Stat" />
-           <MetricRow label="Bootstrap Sig." value={`${(data.bootstrapSignificance * 100).toFixed(1)}%`} tooltip="Empirical probability of positive mean" />
-           <MetricRow label="PBO Estimate" value={`${data.pboEstimatePct}%`} tooltip="Probability of Backtest Overfitting" />
+          <MetricRow label="T-Statistic" value={data.tTest?.tStat} tooltip="T-stat against 0 mean return" />
+          <MetricRow label="P-Value" value={data.tTest?.pValueEstimate} tooltip="P-Value of T-Stat" />
+          <MetricRow label="Bootstrap Sig." value={`${(data.bootstrapSignificance * 100).toFixed(1)}%`} tooltip="Empirical probability of positive mean" />
+          <MetricRow label="Estimated PBO" value={`${data.pboEstimatePct}%`} tooltip="Estimated Probability of Backtest Overfitting (Heuristic)" />
         </SectionCard>
-        
+
         <SectionCard title="Distribution & Assumptions" icon={<Activity className="w-4 h-4" />}>
-           <MetricRow label="Runs Test Z" value={data.runsTest?.zScore} tooltip="Z-score for randomness of win/loss streaks" />
-           <MetricRow label="Is Random (Runs)" value={data.runsTest?.isRandom ? 'Yes' : 'No'} tooltip="Are trade outcomes independent?" />
-           <MetricRow label="Jarque-Bera Stat" value={data.jarqueBera?.jbStat} tooltip="Test for normality" />
-           <MetricRow label="Is Normal (JB)" value={data.jarqueBera?.isNormal ? 'Yes' : 'No'} tooltip="Is return distribution normal?" />
+          <MetricRow label="Runs Test Z" value={data.runsTest?.zScore} tooltip="Z-score for randomness of win/loss streaks" />
+          <MetricRow label="Is Random (Runs)" value={data.runsTest?.isRandom ? 'Yes' : 'No'} tooltip="Are trade outcomes independent?" />
+          <MetricRow label="Jarque-Bera Stat" value={data.jarqueBera?.jbStat} tooltip="Test for normality" />
+          <MetricRow label="Is Normal (JB)" value={data.jarqueBera?.isNormal ? 'Yes' : 'No'} tooltip="Is return distribution normal?" />
         </SectionCard>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <SectionCard title="Deflated Sharpe" icon={<ShieldCheck className="w-4 h-4" />}>
-           <MetricRow label="DSR Z-Score" value={data.deflatedSharpeRatio?.dsrZScore} tooltip="Sharpe adjusted for skewness/kurtosis" />
-           <MetricRow label="WRC Proxy" value={data.whiteRealityCheck} tooltip="White Reality Check approach" />
+          <MetricRow label="DSR Z-Score" value={data.deflatedSharpeRatio?.dsrZScore} tooltip="Sharpe adjusted for skewness/kurtosis" />
+          <MetricRow label="WRC Proxy" value={data.whiteRealityCheck?.p_value} tooltip="White Reality Check approach" />
         </SectionCard>
-        
+
         <SectionCard title="Structural Shift" icon={<TrendingUp className="w-4 h-4" />}>
-           <MetricRow label="Mann-Whitney Z" value={data.mannWhitneyU?.zScore} tooltip="Test between 1st and 2nd half of trades" />
-           <MetricRow label="Dist. Shift" value={data.mannWhitneyU?.distributionShift ? 'Detected' : 'None'} tooltip="Did performance degrade significantly?" />
+          <MetricRow label="Mann-Whitney Z" value={data.mannWhitneyU?.zScore} tooltip="Test between 1st and 2nd half of trades" />
+          <MetricRow label="Dist. Shift" value={data.mannWhitneyU?.distributionShift ? 'Detected' : 'None'} tooltip="Did performance degrade significantly?" />
         </SectionCard>
       </div>
     </div>
@@ -549,22 +575,22 @@ function BenchmarkView({ data }: { data: any }) {
   return (
     <div className="space-y-6">
       <SectionCard title="Benchmark Comparison" icon={<Zap className="w-4 h-4" />}>
-         <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-                <MetricRow label="Benchmark" value={data.benchmark} />
-                <MetricRow label="Strategy CAGR" value={`${data.strategyCAGRPct}%`} />
-                <MetricRow label="Benchmark CAGR" value={`${data.benchmarkCAGRPct}%`} />
-                <MetricRow label="Excess Return" value={`${data.excessReturnPct}%`} />
-                <MetricRow label="Relative DD" value={`${data.relativeDrawdownPct}%`} tooltip="Difference in drawdown vs benchmark" />
-            </div>
-            <div className="space-y-2">
-                <MetricRow label="Alpha" value={data.alpha} />
-                <MetricRow label="Beta" value={data.beta} />
-                <MetricRow label="Correlation" value={data.correlation} />
-                <MetricRow label="Tracking Error" value={data.trackingError} />
-                <MetricRow label="Information Ratio" value={data.informationRatio} />
-            </div>
-         </div>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <MetricRow label="Benchmark" value={data.benchmark} />
+            <MetricRow label="Strategy CAGR" value={`${data.strategyCAGRPct}%`} />
+            <MetricRow label="Benchmark CAGR" value={`${data.benchmarkCAGRPct}%`} />
+            <MetricRow label="Excess Return" value={`${data.excessReturnPct}%`} />
+            <MetricRow label="Relative DD" value={`${data.relativeDrawdownPct}%`} tooltip="Difference in drawdown vs benchmark" />
+          </div>
+          <div className="space-y-2">
+            <MetricRow label="Alpha" value={data.alpha} />
+            <MetricRow label="Beta" value={data.beta} />
+            <MetricRow label="Correlation" value={data.correlation} />
+            <MetricRow label="Tracking Error" value={data.trackingError} />
+            <MetricRow label="Information Ratio" value={data.informationRatio} />
+          </div>
+        </div>
       </SectionCard>
     </div>
   );
@@ -582,28 +608,52 @@ function FullReportView({ data }: { data: any }) {
           <div className="flex flex-col items-center justify-center py-6 h-full">
             <VerdictBadge verdict={overall.verdict} />
             <div className="mt-4 text-center">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Final Validation Status</span>
+              <div className="text-3xl font-black text-white">{overall.score ?? 'N/A'}<span className="text-sm text-slate-500">/100</span></div>
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 block">Final Robustness Score</span>
             </div>
           </div>
         </SectionCard>
         <SectionCard title="Key Metrics" icon={<Activity className="w-4 h-4" />}>
           <div className="grid grid-cols-2 gap-4 text-xs">
-             <MetricRow label="Profit Prob" value={`${overall.probabilityMetrics?.positiveReturn ?? 0}%`} tooltip="% of simulated paths that end in profit" />
-             <MetricRow label="Ruin Prob" value={`${overall.riskOfRuin?.marginCall ?? 0}%`} tooltip="% of simulated paths that blow up the account" />
-             <MetricRow label="IS/OOS Ratio" value={overall.overfitRatio ?? 'N/A'} tooltip="Ratio of Out-of-Sample to In-Sample performance" />
-             <MetricRow label="WF Ratio" value={overall.avgWalkForwardRatio ?? 'N/A'} tooltip="Average Out-of-Sample to In-Sample ratio across walk-forward windows" />
+            <MetricRow label="Confidence" value={overall.confidence ?? 'N/A'} tooltip="Overall confidence in the statistical edge" />
+            <MetricRow label="Live Readiness" value={overall.liveReadiness ?? 'N/A'} tooltip="Is this strategy safe for live deployment?" />
+            <MetricRow label="Profit Prob" value={`${overall.probabilityMetrics?.positiveReturn ?? 0}%`} tooltip="% of simulated paths that end in profit" />
+            <MetricRow label="Ruin Prob" value={`${overall.riskOfRuin?.marginCall ?? 0}%`} tooltip="% of simulated paths that blow up the account" />
+            <MetricRow label="IS/OOS Ratio" value={overall.overfitRatio ?? 'N/A'} tooltip="Ratio of Out-of-Sample to In-Sample performance" />
+            <MetricRow label="WF Ratio" value={overall.avgWalkForwardRatio ?? 'N/A'} tooltip="Average Out-of-Sample to In-Sample ratio across walk-forward windows" />
           </div>
         </SectionCard>
       </div>
-      
+
       <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl">
         <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 mb-4 flex items-center gap-2"><CheckCircle className="w-5 h-5" /> Executive Summary</h3>
         <p className="text-slate-300 text-xs leading-relaxed">
-          {overall.verdict === 'robust' ? 'This strategy demonstrates high resilience across all stress tests, including noise perturbation, out-of-sample validation, and parameter sensitivity. It is cleared for live execution.' :
-           overall.verdict === 'mixed' || overall.verdict === 'moderate_degradation' ? 'This strategy shows moderate robustness but may suffer from partial overfitting. Proceed with caution and reduced position sizing.' :
-           'This strategy failed multiple robustness checks and is highly likely to be overfit to historical data. Do not deploy to production.'}
+          {overall.verdict === 'robust' || overall.verdict === 'highly_robust' ? 'This strategy demonstrates high resilience across all stress tests, including noise perturbation, out-of-sample validation, and parameter sensitivity. It is cleared for live execution.' :
+            overall.verdict === 'mixed' || overall.verdict === 'moderate_degradation' ? 'This strategy shows moderate robustness but may suffer from partial overfitting. Proceed with caution and reduced position sizing.' :
+            overall.verdict === 'highly_overfit' ? 'This strategy failed multiple robustness checks and displays an extreme Probability of Backtest Overfitting (PBO). The statistical edge is an illusion. Do not deploy to production.' :
+              'This strategy failed multiple robustness checks and is highly likely to be overfit to historical data. Do not deploy to production.'}
         </p>
       </div>
+
+      {data.validationSummary && (
+        <SectionCard title="Validation Summary" icon={<ShieldCheck className="w-4 h-4"/>}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
+              <h4 className="text-xs font-bold text-emerald-400 mb-2 uppercase tracking-widest">Pre-Validation</h4>
+              <ul className="text-xs text-slate-300 list-disc pl-4 space-y-1">
+                {data.validationSummary.pre?.warnings?.length > 0 ? data.validationSummary.pre.warnings.map((msg: string, i: number) => <li key={i}>{msg}</li>) : <li>No pre-validation warnings.</li>}
+              </ul>
+            </div>
+            <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl">
+              <h4 className="text-xs font-bold text-indigo-400 mb-2 uppercase tracking-widest">Post-Validation</h4>
+              <ul className="text-xs text-slate-300 list-disc pl-4 space-y-1">
+                {data.validationSummary.post?.warnings?.length > 0 ? data.validationSummary.post.warnings.map((msg: string, i: number) => <li key={i} className="text-rose-400 font-bold">{msg}</li>) : <li>No post-validation warnings.</li>}
+                {data.validationSummary.post?.errors?.length > 0 && data.validationSummary.post.errors.map((msg: string, i: number) => <li key={`err-${i}`} className="text-red-500 font-black">{msg}</li>)}
+              </ul>
+            </div>
+          </div>
+        </SectionCard>
+      )}
 
       {(data.transactionCostStressing || data.statisticalTests) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
@@ -643,29 +693,30 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const { 
+  const {
     robustnessResults, updateRobustnessResult, updateParams,
     robustnessSimulations, robustnessDropoutRate, robustnessNoiseLevel,
     robustnessTrainPct, robustnessWindows, robustnessStep,
-    robustnessTcMaxMultiplier, robustnessTcStep
+    robustnessTcMaxMultiplier, robustnessTcStep,
+    robustnessMcMethod, robustnessSeed, robustnessNumThreads, robustnessBlockSize
   } = useStore();
 
   const TABS: { id: RobustnessTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'full',         label: 'Full Report',   icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-    { id: 'monte-carlo',  label: 'Monte Carlo',   icon: <Activity className="w-3.5 h-3.5" /> },
-    { id: 'is-oos',       label: 'IS / OOS',      icon: <Layers className="w-3.5 h-3.5" /> },
-    { id: 'walk-forward', label: 'Walk-Forward',  icon: <TrendingUp className="w-3.5 h-3.5" /> },
-    { id: 'sensitivity',  label: 'Sensitivity',   icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-    { id: 'transaction',  label: 'Tx Stress',     icon: <TrendingDown className="w-3.5 h-3.5" /> },
-    { id: 'statistics',   label: 'Statistics',    icon: <BarChart2 className="w-3.5 h-3.5" /> },
-    { id: 'benchmark',    label: 'Benchmark',     icon: <Zap className="w-3.5 h-3.5" /> },
+    { id: 'full', label: 'Full Report', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+    { id: 'monte-carlo', label: 'Monte Carlo', icon: <Activity className="w-3.5 h-3.5" /> },
+    { id: 'is-oos', label: 'IS / OOS', icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: 'walk-forward', label: 'Walk-Forward', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+    { id: 'sensitivity', label: 'Sensitivity', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+    { id: 'transaction', label: 'Tx Stress', icon: <TrendingDown className="w-3.5 h-3.5" /> },
+    { id: 'statistics', label: 'Statistics', icon: <BarChart2 className="w-3.5 h-3.5" /> },
+    { id: 'benchmark', label: 'Benchmark', icon: <Zap className="w-3.5 h-3.5" /> },
   ];
 
   const baseParams = `symbol=${symbol}&interval=${interval}&start=${startUnix}&end=${endUnix}${imbaParams}`;
 
   const fetchFullAndDistribute = async (forceRefresh = false) => {
     if (!forceRefresh && robustnessResults['full']) return;
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -674,14 +725,15 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
       endpoint += `&trainPct=${robustnessTrainPct}&windows=${robustnessWindows}&step=${robustnessStep}`;
       endpoint += `&mcSimulations=${robustnessSimulations}&wfWindows=${robustnessWindows}`;
       endpoint += `&tcMax=${robustnessTcMaxMultiplier}&tcStep=${robustnessTcStep}`;
-      
+      endpoint += `&mcMethod=${robustnessMcMethod}&seed=${robustnessSeed}&numThreads=${robustnessNumThreads}&blockSize=${robustnessBlockSize}`;
+
       const res = await fetch(endpoint);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      
+
       // The full endpoint returns { meta, monteCarlo, inSampleOutOfSample, walkForward, parameterSensitivity, transactionCostStressing, statisticalTests, ... }
       // We can distribute these pieces to their respective tabs to avoid duplicate API calls
-      
+
       updateRobustnessResult('full', json);
       if (json.monteCarlo) updateRobustnessResult('monte-carlo', json.monteCarlo);
       if (json.inSampleOutOfSample) updateRobustnessResult('is-oos', json.inSampleOutOfSample);
@@ -690,7 +742,7 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
       if (json.transactionCostStressing) updateRobustnessResult('transaction', json.transactionCostStressing);
       if (json.statisticalTests) updateRobustnessResult('statistics', json.statisticalTests);
       if (json.benchmarkComparison) updateRobustnessResult('benchmark', json.benchmarkComparison);
-      
+
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -736,15 +788,14 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
             <button
               key={t.id}
               onClick={() => runTest(t.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                activeTab === t.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'
-              }`}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'
+                }`}
             >
               {t.icon} {t.label}
             </button>
           ))}
         </div>
-        
+
         <div className="flex gap-2">
           <button
             onClick={() => setIsSettingsOpen(true)}
@@ -790,14 +841,14 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
 
         {!loading && !error && robustnessResults[activeTab] && (
           <>
-            {activeTab === 'full'         && <FullReportView  data={robustnessResults[activeTab]} />}
-            {activeTab === 'monte-carlo'  && <MonteCarloView  data={robustnessResults[activeTab]} />}
-            {activeTab === 'is-oos'       && <ISOOSView       data={robustnessResults[activeTab]} />}
+            {activeTab === 'full' && <FullReportView data={robustnessResults[activeTab]} />}
+            {activeTab === 'monte-carlo' && <MonteCarloView data={robustnessResults[activeTab]} />}
+            {activeTab === 'is-oos' && <ISOOSView data={robustnessResults[activeTab]} />}
             {activeTab === 'walk-forward' && <WalkForwardView data={robustnessResults[activeTab]} />}
-            {activeTab === 'sensitivity'  && <SensitivityView data={robustnessResults[activeTab]} />}
-            {activeTab === 'transaction'  && <TransactionCostView data={robustnessResults[activeTab]} />}
-            {activeTab === 'statistics'   && <StatisticalTestsView data={robustnessResults[activeTab]} />}
-            {activeTab === 'benchmark'    && <BenchmarkView data={robustnessResults[activeTab]} />}
+            {activeTab === 'sensitivity' && <SensitivityView data={robustnessResults[activeTab]} />}
+            {activeTab === 'transaction' && <TransactionCostView data={robustnessResults[activeTab]} />}
+            {activeTab === 'statistics' && <StatisticalTestsView data={robustnessResults[activeTab]} />}
+            {activeTab === 'benchmark' && <BenchmarkView data={robustnessResults[activeTab]} />}
           </>
         )}
       </div>
@@ -814,7 +865,7 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -857,9 +908,34 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
                   <input type="number" step="0.1" value={robustnessTcStep} onChange={e => updateParams({ robustnessTcStep: e.target.value })}
                     className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Monte Carlo Method</label>
+                  <select value={robustnessMcMethod} onChange={e => updateParams({ robustnessMcMethod: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none">
+                    <option value="bootstrap">Bootstrap</option>
+                    <option value="block_bootstrap">Block Bootstrap</option>
+                    <option value="shuffle">Shuffle</option>
+                    <option value="parametric">Parametric</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">RNG Seed</label>
+                  <input type="number" value={robustnessSeed} onChange={e => updateParams({ robustnessSeed: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" placeholder="12345" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Num Threads</label>
+                  <input type="number" min="1" max="16" value={robustnessNumThreads} onChange={e => updateParams({ robustnessNumThreads: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Block Size (Block MC)</label>
+                  <input type="number" value={robustnessBlockSize} onChange={e => updateParams({ robustnessBlockSize: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" placeholder="Auto" />
+                </div>
               </div>
             </div>
-            
+
             <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3">
               <button
                 onClick={() => setIsSettingsOpen(false)}
