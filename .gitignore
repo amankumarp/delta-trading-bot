@@ -3,7 +3,11 @@ logs
 .qodo
 .env
 test*.*
-# *.db-*
-# *.db
+*.db-*
+*.db
 data
 client/dist
+*.log
+*.log-*
+services/market-data/db/data/*.db
+services/market-data/db/data/*.db-*
