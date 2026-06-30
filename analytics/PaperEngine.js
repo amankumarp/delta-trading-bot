@@ -32,9 +32,6 @@ class PaperEngine {
     }
 
     async deploy(config) {
-        // Stop any active deployment first (we only allow 1 active deployment for now to keep UI simple)
-        await this.stopAll();
-
         return new Promise((resolve, reject) => {
             const paramsJson = JSON.stringify(config.params || {});
             const now = Math.floor(Date.now() / 1000);
@@ -73,24 +70,52 @@ class PaperEngine {
         });
     }
 
-    async getActiveDeployment() {
+    async stopDeployment(id) {
         return new Promise((resolve, reject) => {
-            this.db.get(`SELECT * FROM deployments WHERE status = 'active' ORDER BY id DESC LIMIT 1`, (err, row) => {
+            this.db.run(`UPDATE deployments SET status = 'stopped' WHERE id = ?`, [id], (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+    }
+
+    async getActiveDeployments() {
+        return new Promise((resolve, reject) => {
+            this.db.all(`SELECT * FROM deployments WHERE status = 'active' ORDER BY id DESC`, (err, rows) => {
                 if (err) reject(err);
                 else {
-                    if (row) row.params = JSON.parse(row.params);
-                    resolve(row);
+                    const deployments = rows.map(row => {
+                        row.params = JSON.parse(row.params);
+                        return row;
+                    });
+                    resolve(deployments);
                 }
             });
         });
     }
 
-    // This calculates the live state of the paper deployment deterministically
-    async getStatus() {
-        const deployment = await this.getActiveDeployment();
-        if (!deployment) return { active: false };
+    // This calculates the live state of all paper deployments deterministically
+    async getStatuses() {
+        const deployments = await this.getActiveDeployments();
+        if (!deployments || deployments.length === 0) return { active: false, deployments: [] };
 
-        // We fetch data from deployed_at MINUS a warmup period (e.g. 300 candles)
+        const statuses = await Promise.all(deployments.map(async (deployment) => {
+            try {
+                return await this.calculateDeploymentStatus(deployment);
+            } catch (err) {
+                console.error(`Failed to calc status for deployment ${deployment.id}:`, err);
+                return { active: true, deployment, error: err.message, balance: deployment.balance, trades: [], openPosition: null };
+            }
+        }));
+
+        return {
+            active: true,
+            deployments: statuses,
+            lastUpdate: Math.floor(Date.now() / 1000)
+        };
+    }
+
+    async calculateDeploymentStatus(deployment) {
         const warmupCandles = 300;
         
         // interval mapping to seconds
@@ -140,8 +165,10 @@ class PaperEngine {
         for (const t of processedTrades) {
             const entryTimeSecs = Math.floor(new Date(t.entry_time).getTime() / 1000);
             if (entryTimeSecs >= deployment.deployed_at) {
+                t.profit = t.pnl || 0;
+                t.profitPct = t.avg_profit || 0;
                 paperTrades.push(t);
-                currentBalance += parseFloat(t.profit);
+                currentBalance += t.pnl || 0;
             }
         }
 
@@ -196,12 +223,10 @@ class PaperEngine {
         }
 
         return {
-            active: true,
             deployment,
             balance: currentBalance,
             trades: paperTrades,
-            openPosition,
-            lastUpdate: Math.floor(Date.now() / 1000)
+            openPosition
         };
     }
 }

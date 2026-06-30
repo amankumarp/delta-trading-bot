@@ -38,7 +38,7 @@ async function fetchCandlesFromDelta(symbol, interval, from, to) {
   try {
     const res = await axios.get("https://api.delta.exchange/v2/history/candles", {
       params: { symbol, resolution: interval, start: from, end: to },
-      timeout: 10000
+      timeout: 30000
     });
     if (res.status !== 200) throw new Error(`Failed to fetch candles: ${res.statusText}`);
     if (!res.data || !res.data.result) throw new Error("Invalid response format from Delta API");
@@ -64,7 +64,7 @@ async function fetchCandlesFromCoinDCX(symbol, interval, from, to) {
       pcode: 'f'
     };
     
-    const res = await axios.get(url, { params, timeout: 10000 });
+    const res = await axios.get(url, { params, timeout: 30000 });
     if (res.status !== 200) throw new Error(`Failed to fetch candles: ${res.statusText}`);
     if (!res.data.data || !Array.isArray(res.data.data)) throw new Error("Invalid response format from CoinDCX");
     

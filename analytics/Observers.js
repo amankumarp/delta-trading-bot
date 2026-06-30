@@ -113,18 +113,20 @@ class TradeSummaryObserver extends BaseObserver {
             sortinoRatio: "N/A",
             expectancy: "0.00",
             totalFees: "0.00",
-            stoplossTouched: 0
+            stoplossTouched: 0,
+            avgWin: "0.00",
+            avgLoss: "0.00"
         };
 
         const meanReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
         const varianceReturn = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
         const stdDevReturn = Math.sqrt(varianceReturn);
-        const sharpeRatio = stdDevReturn !== 0 ? (meanReturn / stdDevReturn).toFixed(2) : "N/A";
+        const sharpeRatio = stdDevReturn !== 0 ? ((meanReturn / stdDevReturn) * Math.sqrt(this.totalTrades > 0 ? (this.totalTrades / (this.totalDays > 0 ? (this.totalDays/365) : 1)) : 1)).toFixed(2) : "N/A";
 
         const downsideReturns = returns.filter(r => r < 0);
         const downsideVarReturn = downsideReturns.length > 0 ? downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length : 0;
         const downsideStdDevReturn = Math.sqrt(downsideVarReturn);
-        const sortinoRatio = downsideStdDevReturn !== 0 ? (meanReturn / downsideStdDevReturn).toFixed(2) : "N/A";
+        const sortinoRatio = downsideStdDevReturn !== 0 ? ((meanReturn / downsideStdDevReturn) * Math.sqrt(this.totalTrades > 0 ? (this.totalTrades / (this.totalDays > 0 ? (this.totalDays/365) : 1)) : 1)).toFixed(2) : "N/A";
 
         // Expectancy: (WinRate * AvgWin) + (LossRate * AvgLoss)
         const avgWin = this.wins.length > 0 ? this.grossProfit / this.wins.length : 0;
@@ -162,7 +164,9 @@ class TradeSummaryObserver extends BaseObserver {
             winLossRatio,
             kelly,
             totalFees: this.totalFees.toFixed(2),
-            stoplossTouched: this.stoplossTouchedCount
+            stoplossTouched: this.stoplossTouchedCount,
+            avgWin: avgWin.toFixed(2),
+            avgLoss: avgLoss.toFixed(2)
         };
     }
 }

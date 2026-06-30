@@ -6,6 +6,8 @@ class BacktestEngine {
             initialBalance: 10000,
             leverage: 200,
             fee: 0.1,
+            slippage: 0.05, // default 0.05% slippage per side
+            spread: 0.01,   // default 0.01% spread per side
             riskPercentPerTrade: 1,
             ...options
         };
@@ -34,8 +36,11 @@ class BacktestEngine {
             const entryPrice = parseFloat(trade.entry_price) || 0;
             const positionSize = (currentBalance * this.options.riskPercentPerTrade / 100) * this.options.leverage;
             const qnt = entryPrice !== 0 ? (positionSize / entryPrice) : 0;
-            const feeAmount = (positionSize * this.options.fee / 100) * 2; // entry + exit
-            const pnl = (positionSize * rawProfitPct / 100) - feeAmount;
+            
+            // Calculate total execution costs (fees, slippage, spread) per side
+            const costPerSide = this.options.fee + this.options.slippage + (this.options.spread / 2);
+            const totalCost = (positionSize * costPerSide / 100) * 2; // entry + exit
+            const pnl = (positionSize * rawProfitPct / 100) - totalCost;
 
             // Handle partial exit quantities if applicable
             let partial_exit_qnt = undefined;
@@ -45,14 +50,14 @@ class BacktestEngine {
                 // Currently Supertrend AI takes 50% out at partial exit target
                 partial_exit_qnt = qnt * 0.5;
                 const partialRawProfit = parseFloat(trade.partial_profit) || 0;
-                partial_pnl = ((positionSize * 0.5) * partialRawProfit / 100) - (feeAmount * 0.5);
+                partial_pnl = ((positionSize * 0.5) * partialRawProfit / 100) - (totalCost * 0.5);
             }
 
             // Attach pnl and qnt to a copy of the trade
             const processedTrade = {
                 ...trade,
                 pnl: parseFloat(pnl.toFixed(2)),
-                feePaid: parseFloat(feeAmount.toFixed(2)),
+                feePaid: parseFloat(totalCost.toFixed(2)),
                 qnt: parseFloat(qnt.toFixed(4)),
                 ...(partial_exit_qnt && { partial_exit_qnt: parseFloat(partial_exit_qnt.toFixed(4)) }),
                 ...(partial_pnl !== undefined && { partial_pnl: parseFloat(partial_pnl.toFixed(2)) })
@@ -73,6 +78,8 @@ class BacktestEngine {
             initialBalance: this.options.initialBalance,
             leverage: this.options.leverage,
             fee: this.options.fee,
+            slippage: this.options.slippage,
+            spread: this.options.spread,
             riskPercentPerTrade: this.options.riskPercentPerTrade
         };
 

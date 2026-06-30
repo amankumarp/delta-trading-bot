@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { RefreshCcw, ShieldCheck, TrendingUp, TrendingDown, Activity, AlertTriangle, CheckCircle, XCircle, Layers, BarChart2, Zap } from 'lucide-react';
+import { RefreshCcw, ShieldCheck, TrendingUp, TrendingDown, Activity, AlertTriangle, CheckCircle, XCircle, Layers, BarChart2, Zap, Settings, X } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
+import { useStore } from '../store';
 
-type RobustnessTab = 'full' | 'monte-carlo' | 'is-oos' | 'walk-forward' | 'sensitivity';
+type RobustnessTab = 'full' | 'monte-carlo' | 'is-oos' | 'walk-forward' | 'sensitivity' | 'transaction' | 'statistics' | 'benchmark';
 
 interface Props {
   apiUrl: string;
@@ -15,6 +16,9 @@ interface Props {
 
 const VERDICT_CONFIG: Record<string, { color: string; bg: string; border: string; icon: React.ReactNode; label: string }> = {
   robust:                { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Robust' },
+  highly_robust:         { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Highly Robust' },
+  edge_confirmed:        { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', icon: <CheckCircle className="w-5 h-5" />, label: 'Edge Confirmed' },
+  no_statistical_edge:   { color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    icon: <XCircle className="w-5 h-5" />,       label: 'No Statistical Edge' },
   moderate_degradation:  { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   icon: <AlertTriangle className="w-5 h-5" />, label: 'Moderate Degradation' },
   likely_overfit:        { color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    icon: <XCircle className="w-5 h-5" />,       label: 'Likely Overfit' },
   mixed:                 { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   icon: <AlertTriangle className="w-5 h-5" />, label: 'Mixed' },
@@ -60,7 +64,6 @@ function MonteCarloView({ data }: { data: any }) {
   const histData = (data.histogram || []).map((b: any) => ({ name: `$${Math.round(b.lo/1000)}k`, count: b.count }));
   const ddHistData = (data.ddHistogram || []).map((b: any) => ({ name: b.label, count: b.count }));
   const sharpeHistData = (data.sharpeHistogram || []).map((b: any) => ({ name: b.label, count: b.count }));
-  const adv = data.advancedStats || {};
   const ciData = [
     { p: 'p5',  final: data.finalBalance?.p5,  dd: data.maxDrawdownPct?.p5,  ret: data.totalReturnPct?.p5, sharpe: data.sharpeRatio?.p5 },
     { p: 'p25', final: data.finalBalance?.p25, dd: data.maxDrawdownPct?.p25, ret: data.totalReturnPct?.p25, sharpe: data.sharpeRatio?.p25 },
@@ -76,18 +79,22 @@ function MonteCarloView({ data }: { data: any }) {
         <span className="text-[10px] font-black uppercase tracking-widest">Stress Testing Active: Up to 20% Missed Trades, 5% Execution Noise</span>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-5 text-center" title="% of Monte Carlo simulations resulting in a net profit.">
-          <div className="text-3xl font-black text-emerald-400">{data.profitProbabilityPct}%</div>
-          <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-1 cursor-help border-b border-slate-700 border-dashed inline-block">Profit Probability</div>
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Methodology</span>
+          <span className="text-lg font-black text-white block uppercase">{data.method || 'Bootstrap'}</span>
         </div>
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-5 text-center" title="% of simulations resulting in account ruin (drawdown > 90%).">
-          <div className="text-3xl font-black text-rose-400">{data.ruinProbabilityPct}%</div>
-          <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-1 cursor-help border-b border-slate-700 border-dashed inline-block">Ruin Probability</div>
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2" title="% of Monte Carlo simulations resulting in a net profit.">
+          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block mb-1">Profit Prob</span>
+          <span className="text-lg font-black text-emerald-400 block">{data.probabilityMetrics?.positiveReturn ?? 0}%</span>
         </div>
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 text-center" title="Average of the maximum drawdowns across all simulations.">
-          <div className="text-3xl font-black text-amber-400">{data.expectedMaxDrawdownPct}%</div>
-          <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-1 cursor-help border-b border-slate-700 border-dashed inline-block">Expected Max DD</div>
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2" title="% of simulations resulting in account ruin (margin call).">
+          <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest block mb-1">Ruin Prob</span>
+          <span className="text-lg font-black text-rose-400 block">{data.riskOfRuin?.marginCall ?? 0}%</span>
+        </div>
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2" title="Average of the maximum drawdowns across all simulations.">
+          <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest block mb-1">Expected Max DD</span>
+          <span className="text-lg font-black text-amber-400 block">{data.expectedMaxDrawdownPct}%</span>
         </div>
       </div>
 
@@ -214,59 +221,20 @@ function MonteCarloView({ data }: { data: any }) {
         </ResponsiveContainer>
       </SectionCard>
 
-      <SectionCard title="Robustness Assessment" icon={<ShieldCheck className="w-4 h-4" />}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-[9px] text-slate-600 uppercase tracking-widest border-b border-white/5">
-                <th className="pb-4 text-left">Probability</th>
-                <th className="pb-4 text-left">Value</th>
-                <th className="pb-4 text-left">Interpretation</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="py-4 font-bold text-slate-300">
-                  P(Final &gt; Initial)<br />
-                  <span className="text-[10px] text-slate-500 font-normal">— profitable</span>
-                </td>
-                <td className="py-4 font-black text-emerald-400">{adv.pProfitable ?? 0}%</td>
-                <td className="py-4 text-slate-400">Edge mathematically guaranteed</td>
-              </tr>
-              <tr className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="py-4 font-bold text-slate-300">
-                  P(Final &gt; B&amp;H)<br />
-                  <span className="text-[10px] text-slate-500 font-normal">— beats buy-and-hold</span>
-                </td>
-                <td className="py-4 font-black text-emerald-400">{adv.pBeatsBuyAndHold ?? 0}%</td>
-                <td className="py-4 text-slate-400">Strategy adds value vs HODL</td>
-              </tr>
-              <tr className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="py-4 font-bold text-slate-300">
-                  P(Final &gt; Realized)<br />
-                  <span className="text-[10px] text-slate-500 font-normal">— beats realized result</span>
-                </td>
-                <td className="py-4 font-black text-indigo-400">{adv.pBeatsRealized ?? 0}%</td>
-                <td className="py-4 text-slate-400">Cumulative P&amp;L is fixed</td>
-              </tr>
-              <tr className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="py-4 font-bold text-slate-300">
-                  P(Max DD &gt; 30%)<br />
-                  <span className="text-[10px] text-slate-500 font-normal">— moderate tail risk</span>
-                </td>
-                <td className="py-4 font-black text-emerald-400">{adv.pMaxDD30 ?? 0}%</td>
-                <td className="py-4 text-slate-400">HIGH path-dependent DD risk</td>
-              </tr>
-              <tr className="hover:bg-white/[0.02]">
-                <td className="py-4 font-bold text-slate-300">
-                  P(Max DD &gt; 50%)<br />
-                  <span className="text-[10px] text-slate-500 font-normal">— severe tail risk</span>
-                </td>
-                <td className="py-4 font-black text-emerald-400">{adv.pMaxDD50 ?? 0}%</td>
-                <td className="py-4 text-slate-400">Account-threatening in most orderings</td>
-              </tr>
-            </tbody>
-          </table>
+      <SectionCard title="Risk of Ruin & Probabilities" icon={<ShieldCheck className="w-4 h-4" />}>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <MetricRow label="P(Profit > 0)" value={`${data.probabilityMetrics?.positiveReturn ?? 0}%`} />
+            <MetricRow label="P(Sharpe > 0)" value={`${data.probabilityMetrics?.positiveExpectancy ?? 0}%`} />
+            <MetricRow label="P(Beat Buy & Hold)" value={`${data.probabilityMetrics?.beatBuyAndHold ?? 0}%`} />
+            <MetricRow label="P(Beat Realized)" value={`${data.probabilityMetrics?.beatRealized ?? 0}%`} />
+          </div>
+          <div className="space-y-2">
+            <MetricRow label="P(Margin Call)" value={`${data.riskOfRuin?.marginCall ?? 0}%`} />
+            <MetricRow label="P(Drawdown > 20%)" value={`${data.probabilityMetrics?.drawdown20 ?? 0}%`} />
+            <MetricRow label="P(Drawdown > 30%)" value={`${data.riskOfRuin?.drawdown30 ?? 0}%`} />
+            <MetricRow label="P(Drawdown > 50%)" value={`${data.riskOfRuin?.drawdown50 ?? 0}%`} />
+          </div>
         </div>
       </SectionCard>
     </div>
@@ -340,6 +308,18 @@ function WalkForwardView({ data }: { data: any }) {
           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block cursor-help border-b border-slate-700 border-dashed inline-block mb-1">Avg WF Ratio</span>
           <span className="text-lg font-black text-white block">{data.avgOverfitRatio}</span>
         </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Pass Rate</span>
+          <span className="text-lg font-black text-emerald-400 block">{data.passRatePct}%</span>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Stability</span>
+          <span className="text-lg font-black text-indigo-400 block">{data.stabilityScore}</span>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Drift</span>
+          <span className={`text-lg font-black block ${data.driftScore < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{data.driftScore}</span>
+        </div>
       </div>
 
       <SectionCard title="IS vs OOS Score Per Window" icon={<BarChart2 className="w-4 h-4" />}>
@@ -371,7 +351,11 @@ function WalkForwardView({ data }: { data: any }) {
           <tbody>
             {windows.map((w: any) => (
               <tr key={w.window} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                <td className="py-3 font-black text-emerald-400">W{w.window}</td>
+                <td className="py-3 font-black text-emerald-400">
+                   W{w.window}
+                   {w.window === data.bestWindow && <span className="ml-2 text-[8px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded uppercase">Best</span>}
+                   {w.window === data.worstWindow && <span className="ml-2 text-[8px] bg-rose-500/20 text-rose-400 px-1 py-0.5 rounded uppercase">Worst</span>}
+                </td>
                 <td className="py-3 text-right text-slate-400">{w.isTrades}</td>
                 <td className="py-3 text-right text-slate-400">{w.oosTrades}</td>
                 <td className="py-3 text-right text-slate-200 font-bold">{w.isScore}</td>
@@ -468,6 +452,124 @@ function SensitivityView({ data }: { data: any }) {
   );
 }
 
+// ── Transaction Cost Stressing Panel ──────────────────────────────────────────
+function TransactionCostView({ data }: { data: any }) {
+  if (!data) return null;
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-4 items-center">
+        <VerdictBadge verdict={data.verdict} />
+        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block cursor-help border-b border-slate-700 border-dashed inline-block mb-1">Breakdown Multiplier</span>
+          <span className="text-lg font-black text-white block">{data.breakdownMultiplier}x</span>
+        </div>
+      </div>
+      <SectionCard title="Transaction Cost Curve" icon={<TrendingDown className="w-4 h-4" />}>
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={data.curve}>
+            <XAxis dataKey="multiplier" tick={{ fontSize: 9, fill: '#475569' }} tickFormatter={(v: any) => `${v}x`} />
+            <YAxis tick={{ fontSize: 9, fill: '#475569' }} />
+            <Tooltip contentStyle={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: 8, fontSize: 11 }} />
+            <Area type="monotone" dataKey="return" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.1} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </SectionCard>
+      
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[9px] text-slate-600 uppercase tracking-widest border-b border-white/5">
+              <th className="pb-3 text-left">Multiplier</th>
+              <th className="pb-3 text-right">Cost Per Side</th>
+              <th className="pb-3 text-right">Net Return</th>
+              <th className="pb-3 text-right">Profit Factor</th>
+              <th className="pb-3 text-right">Sharpe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.curve?.map((c: any) => (
+              <tr key={c.multiplier} className="border-b border-white/5 hover:bg-white/[0.02]">
+                <td className="py-2.5 font-black text-slate-300">{c.multiplier.toFixed(1)}x</td>
+                <td className="py-2.5 text-right font-bold text-slate-400">{c.cost.toFixed(4)}</td>
+                <td className={`py-2.5 text-right font-bold ${c.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{c.return.toFixed(2)}%</td>
+                <td className="py-2.5 text-right font-bold text-indigo-400">{c.PF.toFixed(2)}</td>
+                <td className="py-2.5 text-right font-bold text-slate-300">{c.sharpe.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Statistical Tests Panel ───────────────────────────────────────────────────
+function StatisticalTestsView({ data }: { data: any }) {
+  if (!data) return null;
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-4 items-center">
+        <VerdictBadge verdict={data.verdict} />
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <SectionCard title="Significance & Edge" icon={<BarChart2 className="w-4 h-4" />}>
+           <MetricRow label="T-Statistic" value={data.tTest?.tStat} tooltip="T-stat against 0 mean return" />
+           <MetricRow label="P-Value" value={data.tTest?.pValueEstimate} tooltip="P-Value of T-Stat" />
+           <MetricRow label="Bootstrap Sig." value={`${(data.bootstrapSignificance * 100).toFixed(1)}%`} tooltip="Empirical probability of positive mean" />
+           <MetricRow label="PBO Estimate" value={`${data.pboEstimatePct}%`} tooltip="Probability of Backtest Overfitting" />
+        </SectionCard>
+        
+        <SectionCard title="Distribution & Assumptions" icon={<Activity className="w-4 h-4" />}>
+           <MetricRow label="Runs Test Z" value={data.runsTest?.zScore} tooltip="Z-score for randomness of win/loss streaks" />
+           <MetricRow label="Is Random (Runs)" value={data.runsTest?.isRandom ? 'Yes' : 'No'} tooltip="Are trade outcomes independent?" />
+           <MetricRow label="Jarque-Bera Stat" value={data.jarqueBera?.jbStat} tooltip="Test for normality" />
+           <MetricRow label="Is Normal (JB)" value={data.jarqueBera?.isNormal ? 'Yes' : 'No'} tooltip="Is return distribution normal?" />
+        </SectionCard>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <SectionCard title="Deflated Sharpe" icon={<ShieldCheck className="w-4 h-4" />}>
+           <MetricRow label="DSR Z-Score" value={data.deflatedSharpeRatio?.dsrZScore} tooltip="Sharpe adjusted for skewness/kurtosis" />
+           <MetricRow label="WRC Proxy" value={data.whiteRealityCheck} tooltip="White Reality Check approach" />
+        </SectionCard>
+        
+        <SectionCard title="Structural Shift" icon={<TrendingUp className="w-4 h-4" />}>
+           <MetricRow label="Mann-Whitney Z" value={data.mannWhitneyU?.zScore} tooltip="Test between 1st and 2nd half of trades" />
+           <MetricRow label="Dist. Shift" value={data.mannWhitneyU?.distributionShift ? 'Detected' : 'None'} tooltip="Did performance degrade significantly?" />
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+// ── Benchmark Comparison Panel ────────────────────────────────────────────────
+function BenchmarkView({ data }: { data: any }) {
+  if (!data) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Benchmark Comparison" icon={<Zap className="w-4 h-4" />}>
+         <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+                <MetricRow label="Benchmark" value={data.benchmark} />
+                <MetricRow label="Strategy CAGR" value={`${data.strategyCAGRPct}%`} />
+                <MetricRow label="Benchmark CAGR" value={`${data.benchmarkCAGRPct}%`} />
+                <MetricRow label="Excess Return" value={`${data.excessReturnPct}%`} />
+                <MetricRow label="Relative DD" value={`${data.relativeDrawdownPct}%`} tooltip="Difference in drawdown vs benchmark" />
+            </div>
+            <div className="space-y-2">
+                <MetricRow label="Alpha" value={data.alpha} />
+                <MetricRow label="Beta" value={data.beta} />
+                <MetricRow label="Correlation" value={data.correlation} />
+                <MetricRow label="Tracking Error" value={data.trackingError} />
+                <MetricRow label="Information Ratio" value={data.informationRatio} />
+            </div>
+         </div>
+      </SectionCard>
+    </div>
+  );
+}
+
 // ── Full Report Panel ─────────────────────────────────────────────────────────
 function FullReportView({ data }: { data: any }) {
   const { overall } = data;
@@ -486,8 +588,8 @@ function FullReportView({ data }: { data: any }) {
         </SectionCard>
         <SectionCard title="Key Metrics" icon={<Activity className="w-4 h-4" />}>
           <div className="grid grid-cols-2 gap-4 text-xs">
-             <MetricRow label="Profit Prob" value={`${overall.profitProbabilityPct}%`} tooltip="% of simulated paths that end in profit" />
-             <MetricRow label="Ruin Prob" value={`${overall.ruinProbabilityPct}%`} tooltip="% of simulated paths that blow up the account" />
+             <MetricRow label="Profit Prob" value={`${overall.probabilityMetrics?.positiveReturn ?? 0}%`} tooltip="% of simulated paths that end in profit" />
+             <MetricRow label="Ruin Prob" value={`${overall.riskOfRuin?.marginCall ?? 0}%`} tooltip="% of simulated paths that blow up the account" />
              <MetricRow label="IS/OOS Ratio" value={overall.overfitRatio ?? 'N/A'} tooltip="Ratio of Out-of-Sample to In-Sample performance" />
              <MetricRow label="WF Ratio" value={overall.avgWalkForwardRatio ?? 'N/A'} tooltip="Average Out-of-Sample to In-Sample ratio across walk-forward windows" />
           </div>
@@ -502,16 +604,51 @@ function FullReportView({ data }: { data: any }) {
            'This strategy failed multiple robustness checks and is highly likely to be overfit to historical data. Do not deploy to production.'}
         </p>
       </div>
+
+      {(data.transactionCostStressing || data.statisticalTests) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          {data.transactionCostStressing && (
+            <SectionCard title="Transaction Cost Stressing" icon={<TrendingDown className="w-4 h-4" />}>
+              <div className="flex flex-col items-center justify-center py-4">
+                <VerdictBadge verdict={data.transactionCostStressing.verdict} />
+                <div className="grid grid-cols-2 gap-4 mt-6 w-full text-xs">
+                  <MetricRow label="Base Cost" value={`${(data.transactionCostStressing.baseCostPerSide * 100).toFixed(3)}%`} tooltip="Sum of fee, slippage, and spread per side" />
+                  <MetricRow label="Breakdown At" value={`${data.transactionCostStressing.breakdownMultiplier}x`} tooltip="Multiplier of base costs at which net profit is <= 0 or Sharpe < 0.5" />
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {data.statisticalTests && (
+            <SectionCard title="Statistical Tests (T-Test)" icon={<BarChart2 className="w-4 h-4" />}>
+              <div className="flex flex-col items-center justify-center py-4">
+                <VerdictBadge verdict={data.statisticalTests.verdict} />
+                <div className="grid grid-cols-2 gap-4 mt-6 w-full text-xs">
+                  <MetricRow label="T-Statistic" value={data.statisticalTests.tTest?.tStat} tooltip="T-statistic measuring mean trade return against 0" />
+                  <MetricRow label="P-Value" value={data.statisticalTests.tTest?.pValueEstimate} tooltip="Probability that edge is due to random chance" />
+                </div>
+              </div>
+            </SectionCard>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Main Export ───────────────────────────────────────────────────────────────
+
 const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix, endUnix, imbaParams }) => {
   const [activeTab, setActiveTab] = useState<RobustnessTab>('full');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, any>>({});
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { 
+    robustnessResults, updateRobustnessResult, updateParams,
+    robustnessSimulations, robustnessDropoutRate, robustnessNoiseLevel,
+    robustnessTrainPct, robustnessWindows, robustnessStep,
+    robustnessTcMaxMultiplier, robustnessTcStep
+  } = useStore();
 
   const TABS: { id: RobustnessTab; label: string; icon: React.ReactNode }[] = [
     { id: 'full',         label: 'Full Report',   icon: <ShieldCheck className="w-3.5 h-3.5" /> },
@@ -519,26 +656,41 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
     { id: 'is-oos',       label: 'IS / OOS',      icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'walk-forward', label: 'Walk-Forward',  icon: <TrendingUp className="w-3.5 h-3.5" /> },
     { id: 'sensitivity',  label: 'Sensitivity',   icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+    { id: 'transaction',  label: 'Tx Stress',     icon: <TrendingDown className="w-3.5 h-3.5" /> },
+    { id: 'statistics',   label: 'Statistics',    icon: <BarChart2 className="w-3.5 h-3.5" /> },
+    { id: 'benchmark',    label: 'Benchmark',     icon: <Zap className="w-3.5 h-3.5" /> },
   ];
 
   const baseParams = `symbol=${symbol}&interval=${interval}&start=${startUnix}&end=${endUnix}${imbaParams}`;
 
-  const runTest = async (tab: RobustnessTab) => {
-    setActiveTab(tab);
-    if (results[tab]) return; // cached
+  const fetchFullAndDistribute = async (forceRefresh = false) => {
+    if (!forceRefresh && robustnessResults['full']) return;
+    
     setLoading(true);
     setError(null);
     try {
-      let endpoint = `${apiUrl}/api/robustness/${tab}?${baseParams}`;
-      if (tab === 'monte-carlo') {
-        endpoint += `&dropoutRate=0.20&noiseLevel=0.05&simulations=10000`;
-      } else if (tab === 'full') {
-        endpoint += `&dropoutRate=0.20&noiseLevel=0.05&simulations=10000`;
-      }
+      let endpoint = `${apiUrl}/api/robustness/full?${baseParams}`;
+      endpoint += `&dropoutRate=${robustnessDropoutRate}&noiseLevel=${robustnessNoiseLevel}`;
+      endpoint += `&trainPct=${robustnessTrainPct}&windows=${robustnessWindows}&step=${robustnessStep}`;
+      endpoint += `&mcSimulations=${robustnessSimulations}&wfWindows=${robustnessWindows}`;
+      endpoint += `&tcMax=${robustnessTcMaxMultiplier}&tcStep=${robustnessTcStep}`;
+      
       const res = await fetch(endpoint);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      setResults(prev => ({ ...prev, [tab]: json }));
+      
+      // The full endpoint returns { meta, monteCarlo, inSampleOutOfSample, walkForward, parameterSensitivity, transactionCostStressing, statisticalTests, ... }
+      // We can distribute these pieces to their respective tabs to avoid duplicate API calls
+      
+      updateRobustnessResult('full', json);
+      if (json.monteCarlo) updateRobustnessResult('monte-carlo', json.monteCarlo);
+      if (json.inSampleOutOfSample) updateRobustnessResult('is-oos', json.inSampleOutOfSample);
+      if (json.walkForward) updateRobustnessResult('walk-forward', json.walkForward);
+      if (json.parameterSensitivity) updateRobustnessResult('sensitivity', json.parameterSensitivity);
+      if (json.transactionCostStressing) updateRobustnessResult('transaction', json.transactionCostStressing);
+      if (json.statisticalTests) updateRobustnessResult('statistics', json.statisticalTests);
+      if (json.benchmarkComparison) updateRobustnessResult('benchmark', json.benchmarkComparison);
+      
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -546,7 +698,21 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
     }
   };
 
-  const overall = results['monte-carlo'];
+  const runTest = (tab: RobustnessTab) => {
+    setActiveTab(tab);
+  };
+
+  const loadAll = async (forceRefresh = false) => {
+    await fetchFullAndDistribute(forceRefresh);
+  };
+
+  React.useEffect(() => {
+    if (!robustnessResults['full']) {
+      loadAll(false);
+    }
+  }, [baseParams]);
+
+  const overall = robustnessResults['monte-carlo'];
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -564,18 +730,38 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 w-fit">
-        {TABS.map(t => (
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 w-fit">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => runTest(t.id)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeTab === t.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+        
+        <div className="flex gap-2">
           <button
-            key={t.id}
-            onClick={() => runTest(t.id)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              activeTab === t.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'
-            }`}
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all"
           >
-            {t.icon} {t.label}
+            <Settings className="w-3.5 h-3.5" />
+            Config
           </button>
-        ))}
+          <button
+            onClick={() => loadAll(true)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all disabled:opacity-50"
+          >
+            <RefreshCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh Data
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -595,23 +781,105 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
           </div>
         )}
 
-        {!loading && !error && !results[activeTab] && (
+        {!loading && !error && !robustnessResults[activeTab] && (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center opacity-40">
             <ShieldCheck className="w-16 h-16 text-emerald-500" />
             <p className="text-sm font-black uppercase tracking-[0.3em] text-slate-400">Click a tab above to run the test</p>
           </div>
         )}
 
-        {!loading && !error && results[activeTab] && (
+        {!loading && !error && robustnessResults[activeTab] && (
           <>
-            {activeTab === 'full'         && <FullReportView  data={results[activeTab]} />}
-            {activeTab === 'monte-carlo'  && <MonteCarloView  data={results[activeTab]} />}
-            {activeTab === 'is-oos'       && <ISOOSView       data={results[activeTab]} />}
-            {activeTab === 'walk-forward' && <WalkForwardView data={results[activeTab]} />}
-            {activeTab === 'sensitivity'  && <SensitivityView data={results[activeTab]} />}
+            {activeTab === 'full'         && <FullReportView  data={robustnessResults[activeTab]} />}
+            {activeTab === 'monte-carlo'  && <MonteCarloView  data={robustnessResults[activeTab]} />}
+            {activeTab === 'is-oos'       && <ISOOSView       data={robustnessResults[activeTab]} />}
+            {activeTab === 'walk-forward' && <WalkForwardView data={robustnessResults[activeTab]} />}
+            {activeTab === 'sensitivity'  && <SensitivityView data={robustnessResults[activeTab]} />}
+            {activeTab === 'transaction'  && <TransactionCostView data={robustnessResults[activeTab]} />}
+            {activeTab === 'statistics'   && <StatisticalTestsView data={robustnessResults[activeTab]} />}
+            {activeTab === 'benchmark'    && <BenchmarkView data={robustnessResults[activeTab]} />}
           </>
         )}
       </div>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#020617]/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0a0f1d] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between p-6 border-b border-white/5">
+              <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                <Settings className="w-4 h-4" /> Robustness Configuration
+              </h3>
+              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Simulations (MC)</label>
+                  <input type="number" value={robustnessSimulations} onChange={e => updateParams({ robustnessSimulations: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Dropout Rate</label>
+                  <input type="number" step="0.01" value={robustnessDropoutRate} onChange={e => updateParams({ robustnessDropoutRate: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Noise Level</label>
+                  <input type="number" step="0.01" value={robustnessNoiseLevel} onChange={e => updateParams({ robustnessNoiseLevel: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Train Pct (IS/OOS)</label>
+                  <input type="number" step="0.01" value={robustnessTrainPct} onChange={e => updateParams({ robustnessTrainPct: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Walk-Forward Windows</label>
+                  <input type="number" value={robustnessWindows} onChange={e => updateParams({ robustnessWindows: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Sensitivity Step</label>
+                  <input type="number" step="0.01" value={robustnessStep} onChange={e => updateParams({ robustnessStep: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">TC Max Multiplier</label>
+                  <input type="number" step="0.5" value={robustnessTcMaxMultiplier} onChange={e => updateParams({ robustnessTcMaxMultiplier: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">TC Nudge Step</label>
+                  <input type="number" step="0.1" value={robustnessTcStep} onChange={e => updateParams({ robustnessTcStep: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 text-slate-300 hover:bg-white/10 transition-all"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  loadAll(true);
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"
+              >
+                Apply & Rerun
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

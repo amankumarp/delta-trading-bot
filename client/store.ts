@@ -5,7 +5,7 @@ import { STRATEGY_OPTIONS } from './constants';
 
 interface AppState {
   view: 'config' | 'dashboard';
-  activeTab: 'backtest' | 'trades' | 'chart' | 'robustness' | 'optimization' | 'paper';
+  activeTab: 'backtest' | 'trades' | 'chart' | 'robustness' | 'optimization' | 'papertrading';
   focusedTradeIndex?: number;
   
   // Backtest Parameters
@@ -42,6 +42,20 @@ interface AppState {
   // Chart settings
   indicatorSettings: IndicatorSettings;
 
+  // Robustness Settings
+  robustnessSimulations: string;
+  robustnessDropoutRate: string;
+  robustnessNoiseLevel: string;
+  robustnessTrainPct: string;
+  robustnessWindows: string;
+  robustnessStep: string;
+  robustnessTcMaxMultiplier: string;
+  robustnessTcStep: string;
+
+  // Optimization Settings
+  optimizeTopN: string;
+  optimizeMinTrades: string;
+
   // App State Data
   loading: boolean;
   data: BacktestResponse | null;
@@ -52,9 +66,11 @@ interface AppState {
   isBackfilling: boolean;
   backfillProgress: string | null;
 
+  robustnessResults: Record<string, any>;
+
   // Actions
   setView: (view: 'config' | 'dashboard') => void;
-  setActiveTab: (tab: 'backtest' | 'trades' | 'chart' | 'robustness' | 'optimization' | 'paper') => void;
+  setActiveTab: (tab: 'backtest' | 'trades' | 'chart' | 'robustness' | 'optimization' | 'papertrading') => void;
   setFocusedTradeIndex: (index?: number) => void;
   updateParams: (params: Partial<AppState>) => void;
   
@@ -68,6 +84,8 @@ interface AppState {
   setAiInsight: (insight: string | null) => void;
   setAiLoading: (loading: boolean) => void;
   setBackfillProgress: (progress: string | null, isComplete: boolean) => void;
+  setRobustnessResults: (results: Record<string, any>) => void;
+  updateRobustnessResult: (tab: string, data: any) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -106,6 +124,18 @@ export const useStore = create<AppState>()(
       imbaRsiOB: '78',
       imbaRsiOS: '22',
 
+      robustnessSimulations: '10000',
+      robustnessDropoutRate: '0.2',
+      robustnessNoiseLevel: '0.05',
+      robustnessTrainPct: '0.7',
+      robustnessWindows: '5',
+      robustnessStep: '0.1',
+      robustnessTcMaxMultiplier: '20',
+      robustnessTcStep: '0.5',
+
+      optimizeTopN: '10',
+      optimizeMinTrades: '5',
+
       indicatorSettings: {
         indicators: [
           { id: 'ema-1', type: 'EMA', visible: true, color: '#3b82f6', params: { period: 20 } },
@@ -121,6 +151,7 @@ export const useStore = create<AppState>()(
       aiLoading: false,
       isBackfilling: false,
       backfillProgress: null,
+      robustnessResults: {},
 
       setView: (view) => set({ view }),
       setActiveTab: (activeTab) => set({ activeTab }),
@@ -179,10 +210,14 @@ export const useStore = create<AppState>()(
         }
         return { isBackfilling: true, backfillProgress: progress };
       }),
+      setRobustnessResults: (robustnessResults) => set({ robustnessResults }),
+      updateRobustnessResult: (tab, data) => set((state) => ({
+        robustnessResults: { ...state.robustnessResults, [tab]: data }
+      })),
 
       runBacktest: async () => {
         const state = get();
-        set({ loading: true, error: null, aiInsight: null, isBackfilling: false, backfillProgress: null });
+        set({ loading: true, error: null, aiInsight: null, isBackfilling: false, backfillProgress: null, robustnessResults: {} });
 
         try {
           const startUnix = state.startDateTime ? Math.floor(new Date(state.startDateTime).getTime() / 1000) : '';
@@ -269,6 +304,14 @@ export const useStore = create<AppState>()(
         imbaRsiLen: state.imbaRsiLen,
         imbaRsiOB: state.imbaRsiOB,
         imbaRsiOS: state.imbaRsiOS,
+        robustnessSimulations: state.robustnessSimulations,
+        robustnessDropoutRate: state.robustnessDropoutRate,
+        robustnessNoiseLevel: state.robustnessNoiseLevel,
+        robustnessTrainPct: state.robustnessTrainPct,
+        robustnessWindows: state.robustnessWindows,
+        robustnessStep: state.robustnessStep,
+        optimizeTopN: state.optimizeTopN,
+        optimizeMinTrades: state.optimizeMinTrades,
         indicatorSettings: state.indicatorSettings
       }),
     }

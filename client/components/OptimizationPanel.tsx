@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCcw, Settings, Zap, Check, AlertCircle } from 'lucide-react';
+import { RefreshCcw, Settings, Zap, Check, AlertCircle, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useStore } from '../store';
 
 interface Props {
   apiUrl: string;
@@ -14,6 +15,8 @@ const OptimizationPanel: React.FC<Props> = ({ apiUrl, baseParams, onApplyParams 
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [appliedRank, setAppliedRank] = useState<number | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { optimizeTopN, optimizeMinTrades, updateParams } = useStore();
   const [progress, setProgress] = useState<{ current: number, total: number, valid: number } | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
@@ -59,7 +62,7 @@ const OptimizationPanel: React.FC<Props> = ({ apiUrl, baseParams, onApplyParams 
     try {
       // The API endpoint handles creating the params and running the worker
       // We pass the base parameters so it knows which timeframe/asset to use
-      const endpoint = `${apiUrl}/api/optimize?${baseParams}&mode=${mode}&topN=10&minTrades=5`;
+      const endpoint = `${apiUrl}/api/optimize?${baseParams}&mode=${mode}&topN=${optimizeTopN}&minTrades=${optimizeMinTrades}`;
       const res = await fetch(endpoint);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -84,6 +87,14 @@ const OptimizationPanel: React.FC<Props> = ({ apiUrl, baseParams, onApplyParams 
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mt-1">Grid Search & Parameter Discovery</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            disabled={loading}
+            className="bg-slate-800 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-all flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Config
+          </button>
           <select 
             value={mode} 
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setMode(e.target.value as 'fast' | 'full')}
@@ -274,6 +285,55 @@ const OptimizationPanel: React.FC<Props> = ({ apiUrl, baseParams, onApplyParams 
           </div>
         )}
       </div>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#020617]/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0a0f1d] border border-white/10 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between p-6 border-b border-white/5">
+              <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                <Settings className="w-4 h-4" /> Optimizer Config
+              </h3>
+              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Top N Results</label>
+                  <input type="number" value={optimizeTopN} onChange={(e) => updateParams({ optimizeTopN: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Min Trades</label>
+                  <input type="number" value={optimizeMinTrades} onChange={(e) => updateParams({ optimizeMinTrades: e.target.value })}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 text-slate-300 hover:bg-white/10 transition-all"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  runOptimization();
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"
+              >
+                Save & Rerun
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -82,8 +82,13 @@ app.post('/api/paper/deploy', async (req, res) => {
 
 app.post('/api/paper/stop', async (req, res) => {
     try {
-        await PaperEngine.stopAll();
-        res.json({ status: "success", message: "Paper trading engine stopped" });
+        if (req.body.id) {
+            await PaperEngine.stopDeployment(req.body.id);
+            res.json({ status: "success", message: `Paper trading engine deployment ${req.body.id} stopped` });
+        } else {
+            await PaperEngine.stopAll();
+            res.json({ status: "success", message: "All paper trading engines stopped" });
+        }
     } catch (e) {
         res.status(500).json({ error: "Failed to stop paper trading", details: e.message });
     }
@@ -91,7 +96,7 @@ app.post('/api/paper/stop', async (req, res) => {
 
 app.get('/api/paper/status', async (req, res) => {
     try {
-        const status = await PaperEngine.getStatus();
+        const status = await PaperEngine.getStatuses();
         res.json(status);
     } catch (e) {
         res.status(500).json({ error: "Failed to fetch paper trading status", details: e.message });
@@ -106,6 +111,8 @@ app.get("/api/analyze", async (req, res) => {
     const initialBalance     = parseFloat(req.query.balance)   || 10000;
     const leverage           = parseFloat(req.query.leverage)  || 200;
     const fee                = parseFloat(req.query.fee)       || 0.01;
+    const slippage           = parseFloat(req.query.slippage)  || 0.05;
+    const spread             = parseFloat(req.query.spread)    || 0.01;
     const riskPercentPerTrade = parseFloat(req.query.risk)     || 1;
 
     if (!symbol || !interval) {
@@ -279,6 +286,8 @@ app.get("/api/optimize", async (req, res) => {
       initialBalance:      parseFloat(balance)  || 10000,
       leverage:            parseFloat(leverage) || 200,
       fee:                 parseFloat(fee)       || 0.01,
+      slippage:            parseFloat(req.query.slippage) || 0.05,
+      spread:              parseFloat(req.query.spread)   || 0.01,
       riskPercentPerTrade: parseFloat(risk)      || 1,
     };
 
@@ -392,6 +401,8 @@ async function fetchAndRun(req) {
     initialBalance:      parseFloat(balance)   || 10000,
     leverage:            parseFloat(leverage)  || 50,
     fee:                 parseFloat(fee)        || 0.0,
+    slippage:            parseFloat(req.query.slippage) || 0.05,
+    spread:              parseFloat(req.query.spread)   || 0.01,
     riskPercentPerTrade: parseFloat(risk)       || 1,
   };
 
@@ -537,15 +548,27 @@ app.get("/api/robustness/full", async (req, res) => {
     const { ohlcv, processedTrades, engineOpts, stratParams, symbol, interval, from, to, strategyName } =
       await fetchAndRun(req);
 
-    const result = fullRobustnessReport(processedTrades, engineOpts, {
-      mcSimulations: parseInt(req.query.mcSimulations) || 500,  // lower default for speed
-      wfWindows:     parseInt(req.query.wfWindows)     || 5,
+    const result = await fullRobustnessReport(processedTrades, engineOpts, {
+      mcSimulations: parseInt(req.query.mcSimulations) || 1000,
+      wfWindows:     parseInt(req.query.wfWindows)     || 10,
       trainPct:      parseFloat(req.query.trainPct)    || 0.7,
+      tcMax:         parseFloat(req.query.tcMax)       || 20.0,
+      tcStep:        parseFloat(req.query.tcStep)      || 0.5,
       bestParams:    stratParams,
       ohlcv,
       buildTrades:   buildTradeList,
       strategyName
     });
+
+    if (result.error) {
+      return res.status(400).json({
+        error: result.error,
+        cause: result.cause,
+        message: result.message || 'Validation failed before running robustness engine.',
+        status: result.status,
+        validationErrors: result.validationErrors
+      });
+    }
 
     res.status(ohlcv._isPartial ? 202 : 200).json({
       status: ohlcv._isPartial ? "partial" : "success",

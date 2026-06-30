@@ -382,16 +382,41 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                <button
-                  onClick={handleRunBacktest}
-                  disabled={loading || isBackfilling}
-                  className={`w-full text-white py-4.5 rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all shadow-2xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] mt-4 ${
-                    isBackfilling ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
-                  }`}
-                >
-                  {loading || isBackfilling ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
-                  {loading ? 'Synthesizing...' : isBackfilling ? 'Backfilling Data...' : 'Run Simulation'}
-                </button>
+                <div className="flex flex-col gap-3 mt-4">
+                  <button
+                    onClick={handleRunBacktest}
+                    disabled={loading || isBackfilling}
+                    className={`w-full text-white py-4.5 rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all shadow-2xl disabled:opacity-50 flex items-center justify-center gap-3 active:scale-[0.98] ${
+                      isBackfilling ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
+                    }`}
+                  >
+                    {loading || isBackfilling ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
+                    {loading ? 'Synthesizing...' : isBackfilling ? 'Backfilling Data...' : 'Run Backtest Strategy'}
+                  </button>
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      onClick={() => { setActiveTab('papertrading'); setView('dashboard'); }}
+                      className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <Activity className="w-5 h-5" />
+                      Paper Trading
+                    </button>
+                    <button
+                      onClick={() => { setActiveTab('optimization'); setView('dashboard'); }}
+                      className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <Zap className="w-5 h-5" />
+                      Optimization
+                    </button>
+                    <button
+                      onClick={() => { setActiveTab('robustness'); setView('dashboard'); }}
+                      className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <ShieldCheck className="w-5 h-5" />
+                      Robustness
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -639,6 +664,14 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'backtest' && !data && !loading && !isBackfilling && (
+          <div className="flex flex-col items-center justify-center py-32 opacity-40 text-center animate-in fade-in zoom-in duration-500">
+            <LayoutDashboard className="w-16 h-16 text-emerald-500 mb-6" />
+            <h2 className="text-xl font-black uppercase tracking-widest text-slate-300">No Performance Data</h2>
+            <p className="text-xs text-slate-500 mt-2 max-w-sm">Please run a backtest simulation to view performance metrics and analytics.</p>
+          </div>
+        )}
+
         {activeTab === 'trades' && data && (
           <div className="bg-[#0a0f1d] border border-white/5 rounded-[3rem] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-6 duration-700">
             <div className="p-10 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
@@ -740,11 +773,27 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'trades' && !data && !loading && !isBackfilling && (
+          <div className="flex flex-col items-center justify-center py-32 opacity-40 text-center animate-in fade-in zoom-in duration-500">
+            <List className="w-16 h-16 text-emerald-500 mb-6" />
+            <h2 className="text-xl font-black uppercase tracking-widest text-slate-300">No Trade Journal</h2>
+            <p className="text-xs text-slate-500 mt-2 max-w-sm">Please run a backtest simulation to view the detailed trade execution journal.</p>
+          </div>
+        )}
+
         {activeTab === 'chart' && data && (
           <div className="animate-in zoom-in-95 duration-700">
             <div className="bg-[#0f172a] border border-white/10 p-4 rounded-[3rem] shadow-2xl overflow-hidden">
               <TradingChart candles={data.candles} trades={data.trades} focusedTradeId={focusedTradeIndex} indicatorSettings={indicatorSettings} />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'chart' && !data && !loading && !isBackfilling && (
+          <div className="flex flex-col items-center justify-center py-32 opacity-40 text-center animate-in fade-in zoom-in duration-500">
+            <BarChart className="w-16 h-16 text-emerald-500 mb-6" />
+            <h2 className="text-xl font-black uppercase tracking-widest text-slate-300">No Visual Data</h2>
+            <p className="text-xs text-slate-500 mt-2 max-w-sm">Please run a backtest simulation to view the interactive price and indicator chart.</p>
           </div>
         )}
 
