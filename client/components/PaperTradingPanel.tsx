@@ -1,14 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Activity, DollarSign, Crosshair, Zap, AlertTriangle, Settings, X, Plus, List } from 'lucide-react';
+import { Play, Square, Activity, DollarSign, Crosshair, Zap, AlertTriangle, Settings, X, Plus, List, Trash2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Trade } from '../types';
 import { useStore } from '../store';
 import { ASSET_OPTIONS, INTERVAL_OPTIONS } from '../constants';
+import { PaperTradingChart } from './PaperTradingChart';
 
 interface Props {
   apiUrl: string;
   config: any; // Base config from currently viewed backtest
 }
+
+const formatTradeDate = (dateVal: any) => {
+  if (!dateVal) return '-';
+  if (/^\d+$/.test(String(dateVal))) {
+    const ms = String(dateVal).length > 10 ? Number(dateVal) : Number(dateVal) * 1000;
+    return new Date(ms).toLocaleString();
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) {
+    return String(dateVal);
+  }
+  return d.toLocaleString();
+};
 
 const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
   const [status, setStatus] = useState<any>(null);
@@ -33,8 +47,40 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
 
   useEffect(() => {
     fetchStatus();
-    const intervalId = setInterval(fetchStatus, 5000); // Poll every 5s
-    return () => clearInterval(intervalId);
+    
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // When using Next.js proxy, API url might be empty or specific, construct robustly
+    const wsBase = apiUrl ? apiUrl.replace(/^http(s)?:\/\//, `${wsProtocol}//`) : `${wsProtocol}//${window.location.host}`;
+    const wsUrl = `${wsBase}/ws/signals`;
+    
+    let ws: WebSocket;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connectWs = () => {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'paper_status_update') {
+            setStatus(data.data);
+          }
+        } catch (err) {}
+      };
+      ws.onclose = () => {
+        reconnectTimeout = setTimeout(connectWs, 5000);
+      };
+    };
+
+    connectWs();
+
+    // Fallback polling just in case WS drops silently
+    const intervalId = setInterval(fetchStatus, 30000); 
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+    };
   }, [apiUrl]);
 
   const deployEngine = async () => {
@@ -83,7 +129,40 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
     }
   };
 
-  const activeDeployments = status?.deployments || [];
+  const deleteEngine = async (id: string) => {
+    setDeploying(true);
+    try {
+      await fetch(`${apiUrl}/api/paper/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      await fetchStatus();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const startEngine = async (id: string) => {
+    setDeploying(true);
+    try {
+      await fetch(`${apiUrl}/api/paper/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      await fetchStatus();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const allDeployments = status?.deployments || [];
+  const activeCount = allDeployments.filter((d: any) => d.deployment.status === 'active').length;
   
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -103,7 +182,7 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
             Deploy New
           </button>
           
-          {activeDeployments.length > 0 && (
+          {activeCount > 0 && (
             <button
               onClick={() => stopEngine()}
               disabled={deploying}
@@ -123,14 +202,14 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
         </div>
       )}
 
-      {activeDeployments.length === 0 ? (
+      {allDeployments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center opacity-40">
           <Activity className="w-16 h-16 text-indigo-500" />
-          <p className="text-sm font-black uppercase tracking-[0.3em] text-slate-400">No active paper trading deployments</p>
+          <p className="text-sm font-black uppercase tracking-[0.3em] text-slate-400">No paper trading deployments</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {activeDeployments.map((dep: any, idx: number) => {
+          {allDeployments.map((dep: any, idx: number) => {
             const deployment = dep.deployment;
             const balance = dep.balance;
             const openPosition = dep.openPosition;
@@ -159,8 +238,9 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
                 {/* Header */}
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-xl font-black uppercase tracking-tighter text-indigo-400">
+                    <h3 className="text-xl font-black uppercase tracking-tighter text-indigo-400 flex items-center gap-2">
                       {deployment.strategy} <span className="text-white">| {deployment.symbol} {deployment.interval}</span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full ${deployment.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>{deployment.status}</span>
                     </h3>
                     <p className="text-[10px] text-slate-500 font-mono mt-1">Deployed ID: {deployment.id} • {new Date(deployment.deployed_at * 1000).toLocaleString()}</p>
                   </div>
@@ -169,14 +249,32 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
                       onClick={() => setSelectedTradesDeployment(dep)}
                       className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all"
                     >
-                      <List className="w-3 h-3" /> All Trades
+                      <List className="w-3 h-3" /> {deployment.status === 'active' ? 'All Trades' : 'View Trades & Stats'}
                     </button>
-                    <button
-                      onClick={() => stopEngine(deployment.id)}
-                      className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all"
-                    >
-                      <Square className="w-3 h-3" /> Stop
-                    </button>
+                    {deployment.status === 'active' && (
+                      <button
+                        onClick={() => stopEngine(deployment.id)}
+                        className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all"
+                      >
+                        <Square className="w-3 h-3" /> Stop
+                      </button>
+                    )}
+                    {deployment.status === 'stopped' && (
+                      <>
+                        <button
+                          onClick={() => startEngine(deployment.id)}
+                          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all"
+                        >
+                          <Play className="w-3 h-3" /> Start
+                        </button>
+                        <button
+                          onClick={() => deleteEngine(deployment.id)}
+                          className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all"
+                        >
+                          <Trash2 className="w-3 h-3" /> Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -213,15 +311,30 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
                             <span className="text-sm font-black text-white">{openPosition.size.toFixed(4)}</span>
                           </div>
                           <p className="text-[10px] text-slate-400 font-mono">Entry: {openPosition.entryPrice?.toFixed(2)} | Current: {openPosition.currentPrice?.toFixed(2)}</p>
+                          {openPosition.liquidationPrice && (
+                            <p className="text-[10px] text-orange-400/80 font-mono mt-0.5">
+                               Liq. Price: {openPosition.liquidationPrice.toFixed(2)}
+                            </p>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <span className={`text-xl font-black ${openPosition.unrealizedPnLPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <div className="text-right flex flex-col items-end">
+                          <span className={`text-xl font-black ${openPosition.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {openPosition.unrealizedPnL >= 0 ? '+$' : '-$'}{Math.abs(openPosition.unrealizedPnL || 0).toFixed(2)}
+                          </span>
+                          <span className={`text-[10px] font-bold tracking-widest ${openPosition.unrealizedPnLPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
                             {openPosition.unrealizedPnLPct >= 0 ? '+' : ''}{openPosition.unrealizedPnLPct.toFixed(2)}%
                           </span>
                         </div>
                       </div>
                     ) : (
                       <p className="text-sm font-bold text-slate-600 italic mt-2">No active trade.</p>
+                    )}
+                    
+                    {/* Trading Chart */}
+                    {dep.candles && dep.candles.length > 0 && (
+                      <div className="mt-4 bg-[#020617] p-2 rounded-xl border border-white/5">
+                         <PaperTradingChart data={dep.candles} openPosition={openPosition} />
+                      </div>
                     )}
                   </div>
 
@@ -298,7 +411,7 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
                     <th className="pb-4 pt-2 px-2">Entry Price</th>
                     <th className="pb-4 pt-2 px-2">Close Time / Price</th>
                     <th className="pb-4 pt-2 px-2">SL / TP</th>
-                    <th className="pb-4 pt-2 px-2">Drawdown (MAE)</th>
+                    <th className="pb-4 pt-2 px-2">Fees / Funding</th>
                     <th className="pb-4 pt-2 px-2 text-right">PnL</th>
                   </tr>
                 </thead>
@@ -311,18 +424,31 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
                         </span>
                       </td>
                       <td className="py-4 px-2"><span className="text-amber-400 font-bold uppercase text-[9px] tracking-widest">Open</span></td>
-                      <td className="py-4 px-2 text-slate-300">Active Now</td>
-                      <td className="py-4 px-2 text-slate-300">{selectedTradesDeployment.openPosition.entryPrice?.toFixed(2)}</td>
+                      <td className="py-4 px-2 text-slate-300">{formatTradeDate(selectedTradesDeployment.openPosition.entryTime)}</td>
                       <td className="py-4 px-2 text-slate-300">
-                        Current: {selectedTradesDeployment.openPosition.currentPrice?.toFixed(2)}
+                        {selectedTradesDeployment.openPosition.entryPrice?.toFixed(2)}
+                        <br />
+                        <span className="text-[10px] text-slate-500">Qty: {selectedTradesDeployment.openPosition.qnt ? selectedTradesDeployment.openPosition.qnt.toFixed(4) : '-'}</span>
+                      </td>
+                      <td className="py-4 px-2 text-slate-300">
+                        <span className="text-emerald-400 font-bold uppercase text-[9px] tracking-widest">Active Now</span><br />
+                        <span className="text-slate-500">@ {selectedTradesDeployment.openPosition.currentPrice?.toFixed(2)}</span>
                       </td>
                       <td className="py-4 px-2 text-slate-500 text-[10px]">
                         SL: {selectedTradesDeployment.openPosition.stoploss ? selectedTradesDeployment.openPosition.stoploss.toFixed(2) : '-'} <br/>
-                        Next TP: {selectedTradesDeployment.openPosition.takeProfits?.find((tp: any) => !tp.hit)?.targetPrice?.toFixed(2) || '-'}
+                        Next TP: {selectedTradesDeployment.openPosition.takeProfits?.find((tp: any) => !tp.hit)?.targetPrice?.toFixed(2) || '-'} <br/>
+                        {selectedTradesDeployment.openPosition.liquidationPrice && (
+                            <span className="text-orange-400/80">Liq: {selectedTradesDeployment.openPosition.liquidationPrice.toFixed(2)}</span>
+                        )}
                       </td>
-                      <td className="py-4 px-2 text-slate-500">-</td>
-                      <td className={`py-4 px-2 text-right font-black ${selectedTradesDeployment.openPosition.unrealizedPnLPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {selectedTradesDeployment.openPosition.unrealizedPnLPct >= 0 ? '+' : ''}{selectedTradesDeployment.openPosition.unrealizedPnLPct.toFixed(2)}%
+                      <td className="py-4 px-2 text-slate-500 text-[10px]">
+                         Accruing Funding...<br/>
+                         Est. Fees applied on exit
+                      </td>
+                      <td className={`py-4 px-2 text-right font-black ${selectedTradesDeployment.openPosition.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {selectedTradesDeployment.openPosition.unrealizedPnL >= 0 ? '+$' : '-$'}{Math.abs(selectedTradesDeployment.openPosition.unrealizedPnL || 0).toFixed(2)}
+                        <br />
+                        <span className="text-[10px] opacity-70 tracking-widest">{selectedTradesDeployment.openPosition.unrealizedPnLPct.toFixed(2)}%</span>
                       </td>
                     </tr>
                   )}
@@ -336,23 +462,31 @@ const PaperTradingPanel: React.FC<Props> = ({ apiUrl, config }) => {
                             {t.isLong ? 'LONG' : 'SHORT'}
                           </span>
                         </td>
-                        <td className="py-4 px-2"><span className="text-slate-500 font-bold uppercase text-[9px] tracking-widest">Closed</span></td>
-                        <td className="py-4 px-2 text-slate-300">{new Date(t.entry_time).toLocaleString()}</td>
+                        <td className="py-4 px-2">
+                          <span className={`font-bold uppercase text-[9px] tracking-widest ${t.isLiquidated ? 'text-rose-500' : 'text-slate-500'}`}>
+                            {t.isLiquidated ? 'Liquidated' : 'Closed'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-2 text-slate-300">{formatTradeDate(t.entry_time)}</td>
                         <td className="py-4 px-2 text-slate-300">
                           {t.entry_price?.toFixed(2)}
                           <br />
                           <span className="text-[10px] text-slate-500">Qty: {t.qnt ? t.qnt.toFixed(4) : '-'}</span>
                         </td>
                         <td className="py-4 px-2 text-slate-300">
-                          {new Date(t.exit_time).toLocaleString()} <br/>
+                          {formatTradeDate(t.exit_time)} <br/>
                           <span className="text-slate-500">@ {t.exit_price?.toFixed(2)}</span>
                         </td>
                         <td className="py-4 px-2 text-slate-500 text-[10px]">
                           SL: {t.stoploss ? t.stoploss.toFixed(2) : '-'} <br/>
                           <span className="text-[9px]">Partials: {t.partial_exit_time ? 'Yes' : 'No'}</span>
                         </td>
-                        <td className="py-4 px-2 text-slate-500">
-                          {t.maePct ? `${t.maePct.toFixed(2)}%` : '-'}
+                        <td className="py-4 px-2 text-slate-500 text-[10px]">
+                          Cost: ${t.feePaid ? t.feePaid.toFixed(2) : '0.00'}<br/>
+                          <span className="text-[9px] text-slate-600">Fund: ${t.fundingCost ? t.fundingCost.toFixed(4) : '0.00'}</span>
+                          {t.isLiquidated && (
+                            <><br/><span className="text-[9px] text-rose-500/80">Penalty: ${t.liquidationPenalty?.toFixed(2) || '0.00'}</span></>
+                          )}
                         </td>
                         <td className={`py-4 px-2 text-right font-black ${pnlVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {pnlVal >= 0 ? '+$' : '-$'}{Math.abs(pnlVal).toFixed(2)}

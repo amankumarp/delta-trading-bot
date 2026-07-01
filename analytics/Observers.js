@@ -1,5 +1,12 @@
 function parseCustomDate(dateStr) {
   if (!dateStr) return null;
+  if (typeof dateStr === 'number' || dateStr instanceof Date) {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof dateStr !== 'string') {
+      dateStr = String(dateStr);
+  }
   const regex = /^(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})$/;
   const match = dateStr.match(regex);
   if (!match) {
@@ -494,5 +501,6 @@ module.exports = {
     CategoricalObserver,
     TimeObserver,
     VolatilityObserver,
-    parseCustomDate
+    parseCustomDate,
+    BaseObserver
 };

@@ -26,6 +26,7 @@ import { getStrategyAnalysis } from './services/geminiService';
 import RobustnessPanel from './components/RobustnessPanel';
 import OptimizationPanel from './components/OptimizationPanel';
 import PaperTradingPanel from './components/PaperTradingPanel';
+import { BacktestAnalytics } from './components/BacktestAnalytics';
 
 type TabType = 'backtest' | 'trades' | 'chart' | 'robustness' | 'optimization' | 'papertrading';
 type AppView = 'config' | 'dashboard';
@@ -556,112 +557,7 @@ const App: React.FC = () => {
 
       <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full">
         {activeTab === 'backtest' && data && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-10 pb-20">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="space-y-1">
-                <h2 className="text-4xl font-black uppercase tracking-tighter italic">Performance Overview</h2>
-                <div className="flex items-center gap-3">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em]">Synthetic Alpha Verification v5.2</p>
-                  {isBackfilling && (
-                    <span className="bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-amber-500/20">
-                      Partial Data (Backfilling...)
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex gap-10">
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Entry</p>
-                  <p className="text-xs font-bold text-slate-200">{data.analysis.startTime}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Exit</p>
-                  <p className="text-xs font-bold text-slate-200">{data.analysis.endTime}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-5">
-              <StatCard label="Final Balance" value={`$${Math.abs(parseFloat(stats?.finalBalance || '0')).toLocaleString()}`} variant="green" icon={<DollarSign className="w-4 h-4" />} />
-              <StatCard label="Net Profit" value={`$${parseFloat(stats?.totalProfit || '0').toLocaleString()}`} variant="teal" icon={<TrendingUp className="w-4 h-4" />} />
-              <StatCard label="Win Rate" value={stats?.winRate || 0} suffix="%" variant="dark" icon={<Activity className="w-4 h-4" />} />
-              <StatCard label="Profit Factor" value={stats?.profitFactor || 0} variant="purple" icon={<Scale className="w-4 h-4" />} />
-              <StatCard label="Max Drawdown" value={stats?.maxDrawdownPercent || 0} suffix="%" variant="red" icon={<TrendingDown className="w-4 h-4" />} />
-              <StatCard label="Total Trades" value={stats?.totalTrades || 0} variant="orange" icon={<Layers className="w-4 h-4" />} />
-
-              <StatCard label="CAGR" value={stats?.cagr || 0} suffix="%" variant="green" icon={<TrendingUp className="w-4 h-4" />} />
-              <StatCard label="Expectancy" value={`$${Math.abs(parseFloat(stats?.expectancy || '0')).toFixed(2)}`} variant="teal" icon={<Briefcase className="w-4 h-4" />} />
-              <StatCard label="Win/Loss Ratio" value={stats?.winLossRatio || 0} variant="dark" icon={<Activity className="w-4 h-4" />} />
-              <StatCard label="Kelly %" value={stats?.kelly || 0} suffix="%" variant="purple" icon={<Target className="w-4 h-4" />} />
-              <StatCard label="Recovery Factor" value={stats?.recoveryFactor || 0} variant="red" icon={<Activity className="w-4 h-4" />} />
-              <StatCard label="Sharpe Ratio" value={stats?.sharpeRatio || 0} variant="pink" icon={<Gem className="w-4 h-4" />} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-8">
-              <MarketTrendEquityChart data={stats?.marketTrendData || []} />
-              <EquityCurveChart data={stats?.cumulativeProfit || []} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <HourlyTradingStats data={stats?.hourStats || {}} />
-              <DayOfWeekAnalysis data={stats?.dayOfWeekAnalysis || {}} />
-            </div>
-
-            <ProfitBucketsChart data={stats?.profitBuckets || {}} />
-
-            <DailyProfitHeatmap data={stats?.dailyProfits || {}} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <PerformanceBarChart title="Profit by Session" data={stats?.sessionProfit || {}} color="#818cf8" unit="$" />
-              <PerformanceBarChart title="Win Rate by Session" data={stats?.sessionWinRates || {}} color="#6ee7b7" unit="%" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <PerformanceBarChart title="Profit by Volatility" data={stats?.volProfit || {}} color="#fbbf24" unit="$" />
-              <PerformanceBarChart title="Win Rate by Volatility" data={stats?.volWinRates || {}} color="#f97316" unit="%" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <PositionDistribution data={stats?.posProfit || {}} />
-              <MonthlyYieldChart data={stats?.monthlyProfits || {}} />
-            </div>
-
-            {/* AI Report Section */}
-            <div className="bg-[#0f172a] border border-white/5 p-10 rounded-[2.5rem] shadow-2xl">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-10 bg-slate-900/40 p-8 rounded-3xl border border-white/5">
-                <div className="flex items-center gap-6">
-                  <div className="bg-emerald-500/20 p-5 rounded-2xl border border-emerald-500/20 shadow-lg shadow-emerald-500/10">
-                    <BrainCircuit className="w-10 h-10 text-emerald-500" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black uppercase italic tracking-tighter">Synthetic Intelligence Synthesis</h2>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em] mt-1">Institutional Neural Strategy Layer</p>
-                  </div>
-                </div>
-                <button
-                  onClick={generateAiReport}
-                  disabled={aiLoading}
-                  className="flex items-center gap-3 bg-emerald-500 hover:bg-emerald-600 px-10 py-4.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
-                >
-                  {aiLoading ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                  {aiLoading ? 'Synthesizing Patterns...' : 'Execute Full Strategic Synthesis'}
-                </button>
-              </div>
-
-              <div className="p-4">
-                {aiInsight ? (
-                  <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed whitespace-pre-wrap border-l-4 border-emerald-500/20 pl-10 animate-in fade-in slide-in-from-left-4 duration-1000">
-                    {aiInsight}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 opacity-20 text-center grayscale">
-                    <Gem className="w-20 h-20 text-emerald-500 mb-6" />
-                    <p className="text-sm font-black uppercase tracking-[0.6em] text-slate-400">Initialize Strategic Neural Mapping</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+            <BacktestAnalytics data={data} isBackfilling={isBackfilling} />
         )}
 
         {activeTab === 'backtest' && !data && !loading && !isBackfilling && (
@@ -717,6 +613,7 @@ const App: React.FC = () => {
                       <td className="px-10 py-10">
                         <div className="text-xl font-black text-slate-100 tracking-tighter">${trade.entry_price.toLocaleString()}</div>
                         <div className="text-[10px] text-slate-600 font-black uppercase tracking-widest mt-2">{trade.entry_time}</div>
+                        <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">QTY: {trade.qnt ? trade.qnt.toFixed(4) : '-'}</div>
                       </td>
                       <td className="px-10 py-10">
                         <div className="text-xl font-black text-slate-100 tracking-tighter">${trade.exit_price.toLocaleString()}</div>

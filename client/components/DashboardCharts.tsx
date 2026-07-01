@@ -29,7 +29,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</p>
         {payload.map((p: any, i: number) => (
           <p key={i} className="text-xs font-bold" style={{ color: p.color || p.fill }}>
-            {p.name}: {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}
+            {p.name}: {typeof p.value === 'object' && p.value !== null ? JSON.stringify(p.value) : (typeof p.value === 'number' ? p.value.toFixed(2) : p.value)}
             {p.unit || ''}
           </p>
         ))}

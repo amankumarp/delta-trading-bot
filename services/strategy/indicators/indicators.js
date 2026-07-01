@@ -226,7 +226,10 @@ function calculateStdDev(prices, period) {
         if (i < period - 1) return null;
         const slice = arr.slice(i - period + 1, i + 1);
         if (slice.some(v => v === null || v === undefined || Number.isNaN(v))) return null;
-        return math.std(slice);
+        if (slice.length < 2) return 0;
+        const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+        const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (slice.length - 1);
+        return Math.sqrt(variance);
     });
 }
 

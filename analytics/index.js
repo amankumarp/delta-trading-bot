@@ -94,6 +94,32 @@ app.post('/api/paper/stop', async (req, res) => {
     }
 });
 
+app.post('/api/paper/delete', async (req, res) => {
+    try {
+        if (req.body.id) {
+            await PaperEngine.deleteDeployment(req.body.id);
+            res.json({ status: "success", message: `Paper trading engine deployment ${req.body.id} deleted` });
+        } else {
+            res.status(400).json({ error: "Missing id" });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Failed to delete paper trading", details: e.message });
+    }
+});
+
+app.post('/api/paper/start', async (req, res) => {
+    try {
+        if (req.body.id) {
+            await PaperEngine.startDeployment(req.body.id);
+            res.json({ status: "success", message: `Paper trading engine deployment ${req.body.id} started` });
+        } else {
+            res.status(400).json({ error: "Missing id" });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Failed to start paper trading", details: e.message });
+    }
+});
+
 app.get('/api/paper/status', async (req, res) => {
     try {
         const status = await PaperEngine.getStatuses();
@@ -626,12 +652,23 @@ EventBus.on('signal', (payload) => {
   });
 });
 
-// Broadcast new candle notifications (so dashboard charts auto-refresh)
-EventBus.on('candle', (payload) => {
+// Broadcast new candle notifications and updated paper trading status
+EventBus.on('candle', async (payload) => {
   const msg = JSON.stringify({ type: 'candle', ...payload });
   wss.clients.forEach((client) => {
     if (client.readyState === client.OPEN) client.send(msg);
   });
+
+  // Calculate real-time paper trading state and broadcast
+  try {
+    const status = await PaperEngine.getStatuses();
+    const statusMsg = JSON.stringify({ type: 'paper_status_update', data: status });
+    wss.clients.forEach((client) => {
+      if (client.readyState === client.OPEN) client.send(statusMsg);
+    });
+  } catch (err) {
+    console.error('[ws] Failed to broadcast paper status:', err.message);
+  }
 });
 
 EventBus.on('data_backfilled', (payload) => {

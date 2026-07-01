@@ -131,7 +131,7 @@ class SupertrendAI extends BaseStrategy {
                 const fullExitBear = isCrossUp && !pos.isLong;
 
                 if (fullExitBull || fullExitBear) {
-                    const exitEvent = this.tradeManager.closePosition(time[i], close[i], 'exit_signal', candleData);
+                    const exitEvent = this.tradeManager.forceClose(time[i], close[i], 'exit_signal', candleData);
                     if (exitEvent) tradeEvents.push(exitEvent);
                 } else if (pos.tps && pos.tps.length > 1 && pos.tps[1].hit && pos.quantity > 0) {
                     // TP2 hit -> initiate dynamic trailing for the remaining quantity
