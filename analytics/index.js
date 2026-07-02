@@ -608,7 +608,7 @@ app.get("/api/robustness/full", async (req, res) => {
       ...result,
     });
   } catch (err) {
-    console.error("[/api/robustness/full]", err.message);
+    console.error("[/api/robustness/full]", err.stack);
     if (err.isPartial) {
       return res.status(202).json({ status: "partial", message: err.message, data: [] });
     }

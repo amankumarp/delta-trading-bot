@@ -1,12 +1,22 @@
 function parseCustomDate(dateStr) {
   if (!dateStr) return null;
-  if (typeof dateStr === 'number' || dateStr instanceof Date) {
+  if (typeof dateStr === 'number') {
       const d = new Date(dateStr);
       return isNaN(d.getTime()) ? null : d;
+  }
+  if (dateStr instanceof Date) {
+      return isNaN(dateStr.getTime()) ? null : dateStr;
   }
   if (typeof dateStr !== 'string') {
       dateStr = String(dateStr);
   }
+  
+  // Handle purely numeric strings (Unix timestamps)
+  if (/^\d+$/.test(dateStr)) {
+      const d = new Date(Number(dateStr));
+      return isNaN(d.getTime()) ? null : d;
+  }
+
   const regex = /^(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})$/;
   const match = dateStr.match(regex);
   if (!match) {

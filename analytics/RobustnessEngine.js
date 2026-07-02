@@ -188,6 +188,10 @@ function monteCarlo(processedTrades, engineOpts, opts = {}) {
         let elapsedYears = 1;
         if (processedTrades.length > 1) {
             const parseDate = (dStr) => {
+                if (!dStr) return new Date(NaN);
+                if (typeof dStr === 'number' || (typeof dStr === 'string' && /^\d+$/.test(dStr))) {
+                    return new Date(Number(dStr));
+                }
                 const match = String(dStr).match(/^(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})$/);
                 if (match) return new Date(`${match[3]}-${match[2]}-${match[1]}T${match[4]}:${match[5]}:${match[6]}`);
                 return new Date(dStr);
@@ -978,7 +982,8 @@ function statisticalTests(processedTrades, engineOpts, opts = {}) {
     
     // 1. T-Test
     const se = s / Math.sqrt(n);
-    const tStat = se > 0 ? (m / se) : 0;
+    let tStat = se > 1e-8 ? (m / se) : 0;
+    if (!isFinite(tStat)) tStat = 0;
     
     let pValueEstimate = '>0.10';
     if (tStat > 3.29) pValueEstimate = '<0.001';
@@ -997,7 +1002,8 @@ function statisticalTests(processedTrades, engineOpts, opts = {}) {
     }
     const expectedRuns = ((2 * wins * losses) / n) + 1;
     const varRuns = (2 * wins * losses * (2 * wins * losses - n)) / (n * n * (n - 1));
-    const zRuns = varRuns > 0 ? (runs - expectedRuns) / Math.sqrt(varRuns) : 0;
+    let zRuns = varRuns > 1e-8 ? (runs - expectedRuns) / Math.sqrt(varRuns) : 0;
+    if (!isFinite(zRuns)) zRuns = 0;
 
     // 3. Jarque-Bera Test (Normality)
     let skewSum = 0, kurtSum = 0;
@@ -1006,14 +1012,22 @@ function statisticalTests(processedTrades, engineOpts, opts = {}) {
         skewSum += Math.pow(diff, 3);
         kurtSum += Math.pow(diff, 4);
     }
-    const skewness = s > 0 ? (skewSum / n) / Math.pow(s, 3) : 0;
-    const kurtosis = s > 0 ? (kurtSum / n) / Math.pow(s, 4) : 3;
-    const jbStat = (n / 6) * (Math.pow(skewness, 2) + 0.25 * Math.pow(kurtosis - 3, 2));
+    let skewness = s > 1e-8 ? (skewSum / n) / Math.pow(s, 3) : 0;
+    let kurtosis = s > 1e-8 ? (kurtSum / n) / Math.pow(s, 4) : 3;
+    if (!isFinite(skewness)) skewness = 0;
+    if (!isFinite(kurtosis)) kurtosis = 3;
+    
+    let jbStat = (n / 6) * (Math.pow(skewness, 2) + 0.25 * Math.pow(kurtosis - 3, 2));
+    if (!isFinite(jbStat)) jbStat = 0;
 
     // Calculate elapsed years and trades per year for proper annualization
     let elapsedYears = 1;
     if (processedTrades.length > 1) {
         const parseDate = (dStr) => {
+            if (!dStr) return new Date(NaN);
+            if (typeof dStr === 'number' || (typeof dStr === 'string' && /^\d+$/.test(dStr))) {
+                return new Date(Number(dStr));
+            }
             const match = String(dStr).match(/^(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})$/);
             if (match) return new Date(`${match[3]}-${match[2]}-${match[1]}T${match[4]}:${match[5]}:${match[6]}`);
             return new Date(dStr);
@@ -1028,12 +1042,17 @@ function statisticalTests(processedTrades, engineOpts, opts = {}) {
 
     // 4. Deflated Sharpe Ratio (Approximation)
     const annualFactor = Math.sqrt(tradesPerYear);
-    const baseSharpe = s > 0 ? (m / s) * annualFactor : 0;
+    const baseSharpe = s > 1e-8 ? (m / s) * annualFactor : 0;
     const eulerMascheroni = 0.5772;
     const trials = 100;
     const expectedMaxSharpe = Math.sqrt(2 * Math.log(trials)) + ((2 * Math.log(trials)) ** -0.5) * eulerMascheroni;
-    const dsrDenominator = Math.sqrt(1 - skewness * baseSharpe + ((kurtosis - 1) / 4) * Math.pow(baseSharpe, 2));
-    const dsrZ = dsrDenominator > 0 ? ((baseSharpe - expectedMaxSharpe) * Math.sqrt(n)) / dsrDenominator : 0;
+    
+    // dsrDenominator can be NaN if term under sqrt is negative
+    const innerTerm = 1 - skewness * baseSharpe + ((kurtosis - 1) / 4) * Math.pow(baseSharpe, 2);
+    const dsrDenominator = innerTerm > 0 ? Math.sqrt(innerTerm) : 0;
+    
+    let dsrZ = dsrDenominator > 1e-8 ? ((baseSharpe - expectedMaxSharpe) * Math.sqrt(n)) / dsrDenominator : 0;
+    if (!isFinite(dsrZ)) dsrZ = 0;
     
     // 5. Mann-Whitney U (1st Half vs 2nd Half)
     const half = Math.floor(n / 2);
@@ -1043,7 +1062,8 @@ function statisticalTests(processedTrades, engineOpts, opts = {}) {
     const combined = pnls.map((v, i) => ({ v, i: i < half ? 1 : 2 })).sort((a, b) => a.v - b.v);
     combined.forEach((obj, idx) => { if (obj.i === 1) rankSum1 += (idx + 1); });
     const u1 = rankSum1 - (half * (half + 1)) / 2;
-    const zMW = varU > 0 ? (u1 - meanU1) / Math.sqrt(varU) : 0;
+    let zMW = varU > 1e-8 ? (u1 - meanU1) / Math.sqrt(varU) : 0;
+    if (!isFinite(zMW)) zMW = 0;
 
     // 6. Estimated Probability of Backtest Overfitting (Heuristic)
     // Real CSCV is required for true PBO. Until then, use a heuristic based on t-stat and sample size.
@@ -1119,8 +1139,12 @@ function benchmarkComparison(processedTrades, engineOpts, opts = {}) {
 
     function parseDate(str) {
         if (!str) return null;
+        if (typeof str === 'number' || (typeof str === 'string' && /^\d+$/.test(str))) {
+            const d = new Date(Number(str));
+            return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+        }
         const regex = /^(\d{2})\/(\d{2})\/(\d{4})/;
-        const match = str.match(regex);
+        const match = String(str).match(regex);
         if (match) return `${match[3]}-${match[2]}-${match[1]}`;
         const d = new Date(str);
         return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];

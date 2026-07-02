@@ -195,7 +195,7 @@ const App: React.FC = () => {
   if (view === 'config') {
     return (
       <div className="min-h-screen bg-[#020617] text-slate-100 font-sans p-6 md:p-12 flex flex-col items-center justify-center">
-        <div className="max-w-4xl w-full space-y-10">
+        <div className="max-w-6xl w-full space-y-10">
           <div className="text-center space-y-4">
             <div className="inline-block bg-emerald-500/10 p-5 rounded-3xl border border-emerald-500/20 shadow-2xl mb-2">
               <TrendingUp className="text-emerald-500 w-12 h-12" />
@@ -204,27 +204,27 @@ const App: React.FC = () => {
             <p className="text-slate-500 font-bold uppercase tracking-[0.4em] text-sm">Synthetic Intelligence Trading Suite</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] space-y-8 flex flex-col">
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-emerald-500 flex items-center gap-3">
                 <PlayCircle className="w-5 h-5" /> Selection Engine
               </h2>
               <div className="space-y-4 flex-1">
-                {STRATEGY_OPTIONS.map((opt) => (
+                {strategiesMeta.filter(s => s.available).map((opt) => (
                   <button
-                    key={opt.id}
-                    onClick={() => updateParams({ strategy: opt.id })}
-                    className={`w-full text-left p-6 rounded-2xl border transition-all duration-300 relative group ${strategy === opt.id
+                    key={opt.slug}
+                    onClick={() => updateParams({ strategy: opt.slug })}
+                    className={`w-full text-left p-6 rounded-2xl border transition-all duration-300 relative group ${strategy === opt.slug
                       ? 'bg-emerald-500/10 border-emerald-500 shadow-2xl'
                       : 'bg-white/5 border-white/10 hover:border-white/20'
                       }`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${strategy === opt.id ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>
-                      {opt.icon === 'Zap' ? <Zap className="w-6 h-6" /> : opt.icon === 'Crosshair' ? <Crosshair className="w-6 h-6" /> : opt.icon === 'TrendingUp' ? <TrendingUp className="w-6 h-6" /> : <Activity className="w-6 h-6" />}
+                      <div className={`p-3 rounded-xl ${strategy === opt.slug ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>
+                      <Crosshair className="w-6 h-6" />
                       </div>
                       <div>
-                        <h3 className="font-black text-sm uppercase tracking-widest">{opt.name}</h3>
+                        <h3 className="font-black text-sm uppercase tracking-widest">{opt.slug.replace(/-/g, ' ')}</h3>
                         <p className="text-[10px] text-slate-500 mt-1 uppercase leading-tight font-bold">{opt.description}</p>
                       </div>
                     </div>
@@ -285,10 +285,17 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* ── IMBA ALGO Settings Panel ─────────────────────────── */}
-                {currentStrategyMeta && currentStrategyMeta.params && currentStrategyMeta.params.length > 0 && (
-                  <div className="space-y-2 border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-5 mt-4">
+            {/* ── IMBA ALGO Settings Panel (Now Dynamic) ─────────────────────────── */}
+            <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] space-y-6 flex flex-col">
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-emerald-500 flex items-center gap-3">
+                <Settings className="w-5 h-5" /> Strategy Params
+              </h2>
+              <div className="space-y-5 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                {currentStrategyMeta && currentStrategyMeta.params && currentStrategyMeta.params.length > 0 ? (
+                  <div className="space-y-2 border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-5">
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="w-4 h-4 text-emerald-400" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{currentStrategyMeta.description || 'Strategy Parameters'}</span>
@@ -431,6 +438,11 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-50">
+                    <Crosshair className="w-8 h-8 text-slate-500" />
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No parameters<br/>for this strategy</p>
                   </div>
                 )}
 
