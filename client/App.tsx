@@ -36,9 +36,7 @@ const App: React.FC = () => {
   const {
     view, activeTab, focusedTradeIndex,
     strategy, symbol, interval, startDateTime, endDateTime, balance, leverage, risk, fee, apiUrl,
-    imbaSensitivity, imbaRiskPercent, imbaTP1Pct, imbaTP1Size, imbaTP2Pct, imbaTP2Size, 
-    imbaTP3Pct, imbaTP3Size, imbaTP4Pct, imbaTP4Size, imbaBreakEven, imbaFixedStop, imbaSLPct,
-    imbaUseRsi, imbaRsiLen, imbaRsiOB, imbaRsiOS,
+    dynamicParams, updateDynamicParam,
     indicatorSettings,
     loading, data, error, aiInsight, aiLoading, isBackfilling, backfillProgress,
     setView, setActiveTab, setFocusedTradeIndex, updateParams, removeIndicator, addIndicator, updateIndicator, updateParam,
@@ -64,6 +62,30 @@ const App: React.FC = () => {
 
     return () => ws.close();
   }, [apiUrl, setBackfillProgress]);
+
+  const [strategiesMeta, setStrategiesMeta] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`${apiUrl}/api/strategies`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.strategies) setStrategiesMeta(d.strategies);
+      })
+      .catch(e => console.error('Failed to load strategies meta', e));
+  }, [apiUrl]);
+
+  const currentStrategyMeta = strategiesMeta.find(s => s.slug === strategy);
+
+  // Re-seed dynamic params if switching to a new strategy and they aren't set
+  useEffect(() => {
+    if (currentStrategyMeta && currentStrategyMeta.params) {
+      currentStrategyMeta.params.forEach((p: any) => {
+        if (dynamicParams[p.name] === undefined && p.default !== undefined) {
+          updateDynamicParam(p.name, p.default.toString());
+        }
+      });
+    }
+  }, [currentStrategyMeta, strategy, dynamicParams, updateDynamicParam]);
 
   const journalTotalPages = Math.max(1, Math.ceil((data?.trades.length || 0) / JOURNAL_PAGE_SIZE));
   const journalSafePage = Math.min(journalPage, journalTotalPages);
@@ -265,121 +287,150 @@ const App: React.FC = () => {
                 </div>
 
                 {/* ── IMBA ALGO Settings Panel ─────────────────────────── */}
-                {strategy === 'imba-algo' && (
-                  <div className="space-y-5 border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="flex items-center gap-2 mb-1">
+                {currentStrategyMeta && currentStrategyMeta.params && currentStrategyMeta.params.length > 0 && (
+                  <div className="space-y-2 border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-5 mt-4">
+                    <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="w-4 h-4 text-emerald-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">IMBA ALGO Settings</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{currentStrategyMeta.description || 'Strategy Parameters'}</span>
                     </div>
 
-                    {/* Sensitivity + Risk */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Sensitivity</label>
-                        <input type="number" step="0.1" value={imbaSensitivity} onChange={e => updateParams({ imbaSensitivity: e.target.value })}
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Risk %</label>
-                        <input type="number" step="0.1" value={imbaRiskPercent} onChange={e => updateParams({ imbaRiskPercent: e.target.value })}
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
-                      </div>
-                    </div>
-
-                    {/* Take Profits */}
-                    <div className="space-y-2">
-                      <div className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Take Profits (% move / % position closed)</div>
-                      {[
-                        { label:'TP 1', pct: imbaTP1Pct, pctKey: 'imbaTP1Pct', size: imbaTP1Size, sizeKey: 'imbaTP1Size' },
-                        { label:'TP 2', pct: imbaTP2Pct, pctKey: 'imbaTP2Pct', size: imbaTP2Size, sizeKey: 'imbaTP2Size' },
-                        { label:'TP 3', pct: imbaTP3Pct, pctKey: 'imbaTP3Pct', size: imbaTP3Size, sizeKey: 'imbaTP3Size' },
-                        { label:'TP 4', pct: imbaTP4Pct, pctKey: 'imbaTP4Pct', size: imbaTP4Size, sizeKey: 'imbaTP4Size' },
-                      ].map(({ label, pct, pctKey, size, sizeKey }) => (
-                        <div key={label} className="grid grid-cols-3 gap-2 items-center">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-                          <div className="space-y-0.5">
-                            <label className="text-[7px] text-slate-600 uppercase font-black">Move %</label>
-                            <input type="number" step="0.05" value={pct} onChange={e => updateParams({ [pctKey]: e.target.value })}
-                              className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white focus:border-emerald-500 outline-none" />
-                          </div>
-                          <div className="space-y-0.5">
-                            <label className="text-[7px] text-slate-600 uppercase font-black">Size %</label>
-                            <input type="number" step="5" value={size} onChange={e => updateParams({ [sizeKey]: e.target.value })}
-                              className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white focus:border-emerald-500 outline-none" />
-                          </div>
+                    {Object.entries(
+                      currentStrategyMeta.params.reduce((acc: any, param: any) => {
+                        const g = param.group || 'General';
+                        if (!acc[g]) acc[g] = [];
+                        acc[g].push(param);
+                        return acc;
+                      }, {})
+                    ).map(([group, params]: [string, any]) => (
+                      <div key={group} className="space-y-4 pt-4 border-t border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-[10px] font-black uppercase text-emerald-500/70 tracking-widest">{group}</h4>
+                          <div className="h-px bg-emerald-500/10 flex-1"></div>
                         </div>
-                      ))}
-                    </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {params.map((param: any) => {
+                            const val = dynamicParams[param.name] ?? param.default?.toString() ?? '';
+                            
+                            if (param.type === 'boolean') {
+                              const isTrue = val === 'true' || val === true;
+                              return (
+                                <button
+                                  key={param.name}
+                                  onClick={() => updateDynamicParam(param.name, (!isTrue).toString())}
+                                  className={`col-span-1 flex items-center justify-between p-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+                                    isTrue ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'
+                                  }`}
+                                >
+                                  {param.label}
+                                  <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                    isTrue ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+                                  }`}>
+                                    {isTrue && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                  </span>
+                                </button>
+                              );
+                            }
 
-                    {/* Break-Even Target */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Break-Even After</label>
-                        <select value={imbaBreakEven} onChange={e => updateParams({ imbaBreakEven: e.target.value })}
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none cursor-pointer">
-                          <option value="1">TP 1</option>
-                          <option value="2">TP 2</option>
-                          <option value="3">TP 3</option>
-                          <option value="WITHOUT">Without</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">SL % (if fixed)</label>
-                        <input type="number" step="0.1" value={imbaSLPct} onChange={e => updateParams({ imbaSLPct: e.target.value })}
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
-                      </div>
-                    </div>
+                            if (param.type === 'select') {
+                              return (
+                                <div key={param.name} className="space-y-1.5 col-span-1">
+                                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{param.label}</label>
+                                  <select value={val} onChange={e => updateDynamicParam(param.name, e.target.value)}
+                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none cursor-pointer">
+                                    {param.options?.map((opt: string) => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            }
+                            
+                            if (param.type === 'days_checkbox') {
+                               return (
+                                 <div key={param.name} className="space-y-1.5 md:col-span-2">
+                                   <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{param.label}</label>
+                                   <div className="flex flex-wrap gap-2">
+                                     {[
+                                       { label: 'Mon', value: '1' }, { label: 'Tue', value: '2' }, { label: 'Wed', value: '3' }, 
+                                       { label: 'Thu', value: '4' }, { label: 'Fri', value: '5' }, { label: 'Sat', value: '6' }, { label: 'Sun', value: '7' }
+                                     ].map(day => {
+                                       const selected = val.split(',').includes(day.value);
+                                       return (
+                                         <button key={day.value}
+                                           onClick={() => {
+                                             const current = val ? val.split(',').filter(Boolean) : [];
+                                             if (selected) {
+                                               updateDynamicParam(param.name, current.filter((d: string) => d !== day.value).join(','));
+                                             } else {
+                                               updateDynamicParam(param.name, [...current, day.value].sort().join(','));
+                                             }
+                                           }}
+                                           className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                                             selected ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-white/10 text-slate-500 hover:border-white/20'
+                                           }`}
+                                         >
+                                           {day.label}
+                                         </button>
+                                       );
+                                     })}
+                                   </div>
+                                 </div>
+                               );
+                            }
 
-                    {/* Toggles */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => updateParams({ imbaFixedStop: !imbaFixedStop })}
-                        className={`flex items-center justify-between p-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
-                          imbaFixedStop ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'
-                        }`}
-                      >
-                        Fixed SL
-                        <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          imbaFixedStop ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
-                        }`}>
-                          {imbaFixedStop && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => updateParams({ imbaUseRsi: !imbaUseRsi })}
-                        className={`flex items-center justify-between p-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
-                          imbaUseRsi ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'
-                        }`}
-                      >
-                        RSI Filter
-                        <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          imbaUseRsi ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
-                        }`}>
-                          {imbaUseRsi && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </span>
-                      </button>
-                    </div>
+                            if (param.type === 'sessions_checkbox') {
+                               return (
+                                 <div key={param.name} className="space-y-1.5 md:col-span-2">
+                                   <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{param.label}</label>
+                                   <div className="flex flex-wrap gap-2">
+                                     {[
+                                       { label: 'All Day', value: '00:00-23:59' },
+                                       { label: 'Sydney', value: '02:30-11:30' },
+                                       { label: 'Tokyo', value: '05:30-14:30' },
+                                       { label: 'London', value: '12:30-21:30' },
+                                       { label: 'New York', value: '17:30-02:30' },
+                                     ].map(sess => {
+                                       const selected = val.split(',').includes(sess.value);
+                                       return (
+                                         <button key={sess.label}
+                                           onClick={() => {
+                                             const current = val ? val.split(',').filter(Boolean) : [];
+                                             if (selected) {
+                                               updateDynamicParam(param.name, current.filter((s: string) => s !== sess.value).join(',') || '00:00-23:59');
+                                             } else {
+                                               let newSess = current.filter((s: string) => s !== '00:00-23:59');
+                                               if (sess.value === '00:00-23:59') newSess = [];
+                                               updateDynamicParam(param.name, [...newSess, sess.value].join(','));
+                                             }
+                                           }}
+                                           className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                                             selected ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-white/10 text-slate-500 hover:border-white/20'
+                                           }`}
+                                         >
+                                           {sess.label}
+                                         </button>
+                                       );
+                                     })}
+                                   </div>
+                                   <input type="text" value={val} onChange={e => updateDynamicParam(param.name, e.target.value)}
+                                     placeholder="Custom (e.g. 08:00-16:00)"
+                                     className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none mt-2" />
+                                 </div>
+                               );
+                            }
 
-                    {/* RSI params (only when filter is enabled) */}
-                    {imbaUseRsi && (
-                      <div className="grid grid-cols-3 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">RSI Len</label>
-                          <input type="number" value={imbaRsiLen} onChange={e => updateParams({ imbaRsiLen: e.target.value })}
-                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Overbought</label>
-                          <input type="number" value={imbaRsiOB} onChange={e => updateParams({ imbaRsiOB: e.target.value })}
-                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Oversold</label>
-                          <input type="number" value={imbaRsiOS} onChange={e => updateParams({ imbaRsiOS: e.target.value })}
-                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                            return (
+                              <div key={param.name} className="space-y-1.5 col-span-1">
+                                <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{param.label}</label>
+                                <input type={param.type === 'number' ? 'number' : 'text'} step={param.step} value={val} onChange={e => updateDynamicParam(param.name, e.target.value)}
+                                  className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:border-emerald-500 outline-none" />
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
+                    ))}
                   </div>
                 )}
 
@@ -701,28 +752,20 @@ const App: React.FC = () => {
             interval={interval}
             startUnix={startDateTime ? String(Math.floor(new Date(startDateTime).getTime() / 1000)) : ''}
             endUnix={endDateTime ? String(Math.floor(new Date(endDateTime).getTime() / 1000)) : ''}
-            imbaParams={`&strategy=${strategy}` + (strategy === 'imba-algo'
-              ? `&sensitivity=${imbaSensitivity}&riskPercent=${imbaRiskPercent}&tp1Pct=${imbaTP1Pct}&tp1SizePct=${imbaTP1Size}&tp2Pct=${imbaTP2Pct}&tp2SizePct=${imbaTP2Size}&tp3Pct=${imbaTP3Pct}&tp3SizePct=${imbaTP3Size}&tp4Pct=${imbaTP4Pct}&tp4SizePct=${imbaTP4Size}&breakEvenTarget=${imbaBreakEven}&fixedStop=${imbaFixedStop}&slPercent=${imbaSLPct}`
-              : '')}
+            imbaParams={`&strategy=${strategy}${Object.entries(dynamicParams).map(([k,v])=>`&${k}=${encodeURIComponent(v)}`).join('')}`}
           />
         )}
 
         {activeTab === 'optimization' && (
           <OptimizationPanel
             apiUrl={apiUrl}
-            baseParams={`strategy=${strategy}&symbol=${symbol}&interval=${interval}&start=${startDateTime ? String(Math.floor(new Date(startDateTime).getTime() / 1000)) : ''}&end=${endDateTime ? String(Math.floor(new Date(endDateTime).getTime() / 1000)) : ''}${strategy === 'imba-algo' ? `&sensitivity=${imbaSensitivity}&riskPercent=${imbaRiskPercent}&tp1Pct=${imbaTP1Pct}&tp1SizePct=${imbaTP1Size}&tp2Pct=${imbaTP2Pct}&tp2SizePct=${imbaTP2Size}&tp3Pct=${imbaTP3Pct}&tp3SizePct=${imbaTP3Size}&tp4Pct=${imbaTP4Pct}&tp4SizePct=${imbaTP4Size}&breakEvenTarget=${imbaBreakEven}&fixedStop=${imbaFixedStop}&slPercent=${imbaSLPct}` : ''}`}
+            baseParams={`strategy=${strategy}&symbol=${symbol}&interval=${interval}&start=${startDateTime ? String(Math.floor(new Date(startDateTime).getTime() / 1000)) : ''}&end=${endDateTime ? String(Math.floor(new Date(endDateTime).getTime() / 1000)) : ''}${Object.entries(dynamicParams).map(([k,v])=>`&${k}=${encodeURIComponent(v)}`).join('')}`}
             onApplyParams={(p) => {
-              if (p.sensitivity !== undefined) updateParams({ imbaSensitivity: p.sensitivity.toString() });
-              if (p.tp1Pct !== undefined) updateParams({ imbaTP1Pct: p.tp1Pct.toString() });
-              if (p.tp2Pct !== undefined) updateParams({ imbaTP2Pct: p.tp2Pct.toString() });
-              if (p.tp3Pct !== undefined) updateParams({ imbaTP3Pct: p.tp3Pct.toString() });
-              if (p.tp4Pct !== undefined) updateParams({ imbaTP4Pct: p.tp4Pct.toString() });
-              if (p.tp1SizePct !== undefined) updateParams({ imbaTP1Size: p.tp1SizePct.toString() });
-              if (p.tp2SizePct !== undefined) updateParams({ imbaTP2Size: p.tp2SizePct.toString() });
-              if (p.tp3SizePct !== undefined) updateParams({ imbaTP3Size: p.tp3SizePct.toString() });
-              if (p.tp4SizePct !== undefined) updateParams({ imbaTP4Size: p.tp4SizePct.toString() });
-              if (p.breakEvenTarget !== undefined) updateParams({ imbaBreakEven: p.breakEvenTarget.toString() });
-              if (p.slPercent !== undefined) updateParams({ imbaSLPct: p.slPercent.toString() });
+              Object.entries(p).forEach(([k, v]) => {
+                if (v !== undefined) {
+                  updateDynamicParam(k, v.toString());
+                }
+              });
             }}
           />
         )}
@@ -738,21 +781,7 @@ const App: React.FC = () => {
               leverage: parseFloat(leverage),
               fee: parseFloat(fee),
               risk: parseFloat(risk),
-              params: strategy === 'imba-algo' ? {
-                sensitivity: imbaSensitivity,
-                riskPercent: imbaRiskPercent,
-                tp1Pct: imbaTP1Pct,
-                tp1SizePct: imbaTP1Size,
-                tp2Pct: imbaTP2Pct,
-                tp2SizePct: imbaTP2Size,
-                tp3Pct: imbaTP3Pct,
-                tp3SizePct: imbaTP3Size,
-                tp4Pct: imbaTP4Pct,
-                tp4SizePct: imbaTP4Size,
-                breakEvenTarget: imbaBreakEven,
-                fixedStop: imbaFixedStop,
-                slPercent: imbaSLPct
-              } : {}
+              params: dynamicParams
             }}
           />
         )}

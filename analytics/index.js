@@ -55,8 +55,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// NEW: Expose strategy metadata to the frontend
-app.get('/api/strategies/list', (req, res) => {
+app.get('/api/strategies', (req, res) => {
     try {
         const StrategyRegistry = require('../services/strategy/StrategyRegistry');
         res.json({

@@ -68,6 +68,63 @@ const calcRR = (entry, sl, tp) =>
         ? (tp - entry) / (entry - sl)   // LONG
         : (entry - tp) / (sl - entry);  // SHORT
 
+/** ATR calculation (RMA of True Range) */
+const calculateATR = (high, low, close, period = 10) => {
+    const n = close.length;
+    const atr = new Array(n).fill(null);
+    const tr = new Array(n).fill(null);
+    
+    for (let i = 1; i < n; i++) {
+        tr[i] = Math.max(
+            high[i] - low[i],
+            Math.abs(high[i] - close[i - 1]),
+            Math.abs(low[i] - close[i - 1])
+        );
+    }
+    
+    let sum = 0;
+    for (let i = 1; i <= period && i < n; i++) sum += tr[i];
+    if (n > period) atr[period] = sum / period;
+    
+    for (let i = period + 1; i < n; i++) {
+        atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period;
+    }
+    return atr;
+};
+
+/** Stdev calculation (population stddev as in Pine Script) */
+const calculateStdev = (arr, period) => {
+    const stdev = new Array(arr.length).fill(null);
+    for (let i = period - 1; i < arr.length; i++) {
+        let sum = 0, count = 0;
+        for (let j = i - period + 1; j <= i; j++) {
+            if (arr[j] !== null) { sum += arr[j]; count++; }
+        }
+        if (count > 0) {
+            const mean = sum / count;
+            let sqSum = 0;
+            for (let j = i - period + 1; j <= i; j++) {
+                if (arr[j] !== null) sqSum += Math.pow(arr[j] - mean, 2);
+            }
+            stdev[i] = Math.sqrt(sqSum / count); // biased
+        }
+    }
+    return stdev;
+};
+
+/** SMA calculation */
+const calculateSMA = (arr, period) => {
+    const sma = new Array(arr.length).fill(null);
+    for (let i = period - 1; i < arr.length; i++) {
+        let sum = 0, count = 0;
+        for (let j = i - period + 1; j <= i; j++) {
+            if (arr[j] !== null) { sum += arr[j]; count++; }
+        }
+        if (count > 0) sma[i] = sum / count;
+    }
+    return sma;
+};
+
 /** RSI calculation */
 const calculateRSI = (close, period = 14) => {
     const rsi = new Array(close.length).fill(null);
@@ -120,6 +177,17 @@ class ImbaAlgoStrategy extends BaseStrategy {
         // ── Stop-loss config ─────────────────────────────────────────────
         this.fixedStop       = opts.fixedStop       ?? false; // if true, use slPercent
         this.slPercent       = opts.slPercent       ?? 0;     // % from entry (when fixedStop)
+        this.useSwingSl      = opts.useSwingSl      ?? false;
+        this.swingLength     = opts.swingLength     ?? 10;
+        this.maxSlPercent    = opts.maxSlPercent    ?? 1.0;
+
+        // ── Take-Profit Types ────────────────────────────────────────────
+        this.tpType          = opts.tpType          ?? 'Percent';
+        this.rr1             = opts.rr1             ?? 1.0;
+        this.rr2             = opts.rr2             ?? 2.0;
+        this.rr3             = opts.rr3             ?? 3.0;
+        this.rr4             = opts.rr4             ?? 4.0;
+        this.tp4Open         = opts.tp4Open         ?? false;
 
         // ── RSI filter ───────────────────────────────────────────────────
         this.rsiLen          = opts.rsiLen          ?? 14;
@@ -127,8 +195,22 @@ class ImbaAlgoStrategy extends BaseStrategy {
         this.rsiOS           = opts.rsiOS           ?? 22;
         this.useRsiFilter    = opts.useRsiFilter    ?? false; // off by default (mirrors Pine)
 
+        // ── Time & Limits ────────────────────────────────────────────────
+        this.allowedDays     = opts.allowedDays     ?? "1,2,3,4,5,6,7";
+        this.allowedSessions = opts.allowedSessions ?? "00:00-23:59";
+        this.maxDailyLossPercent = parseFloat(opts.maxDailyLossPercent) || 2;
+        
+        this.parsedDays = this.allowedDays.split(',').map(d => parseInt(d.trim()));
+        this.parsedSessions = this.allowedSessions.split(',').map(s => {
+            const parts = s.split('-');
+            if (parts.length !== 2) return { start: 0, end: 1440 };
+            const [sh, sm] = parts[0].split(':').map(Number);
+            const [eh, em] = parts[1].split(':').map(Number);
+            return { start: (sh||0) * 60 + (sm||0), end: (eh||23) * 60 + (em||59) };
+        });
+
         // ── Warmup ───────────────────────────────────────────────────────
-        this.warmupBars = Math.max(this.sensitivity * 10, this.rsiLen) + 5;
+        this.warmupBars = Math.max(this.sensitivity * 10, this.rsiLen, 30) + 5;
     }
 
     // ── Fibonacci channel at index i ──────────────────────────────────────────
@@ -147,24 +229,46 @@ class ImbaAlgoStrategy extends BaseStrategy {
     }
 
     // ── Compute SL price ─────────────────────────────────────────────────────
-    _calcSL(isLong, entryPrice, fib) {
-        if (this.fixedStop) {
-            return isLong
+    _calcSL(isLong, entryPrice, fib, swingLow, swingHigh) {
+        let slVal;
+        if (this.useSwingSl) {
+            slVal = isLong 
+                ? swingLow * (1 - this.slPercent / 100)
+                : swingHigh * (1 + this.slPercent / 100);
+        } else if (this.fixedStop) {
+            slVal = isLong
                 ? entryPrice * (1 - this.slPercent / 100)
                 : entryPrice * (1 + this.slPercent / 100);
+        } else {
+            // Auto SL
+            const buf = this.slPercent / 100;
+            slVal = isLong
+                ? fib.fib786 * (1 - buf)
+                : fib.fib236 * (1 + buf);
         }
-        // Auto SL: fib786 (long) or fib236 (short), with optional % buffer
-        const buf = this.slPercent / 100;
-        return isLong
-            ? fib.fib786 * (1 - buf)
-            : fib.fib236 * (1 + buf);
+        
+        // Max SL constraint
+        const maxSlDec = this.maxSlPercent / 100;
+        if (isLong && (entryPrice - slVal) > (entryPrice * maxSlDec)) {
+            slVal = entryPrice * (1 - maxSlDec);
+        }
+        if (!isLong && (slVal - entryPrice) > (entryPrice * maxSlDec)) {
+            slVal = entryPrice * (1 + maxSlDec);
+        }
+        return slVal;
     }
 
     // ── Compute TP price ─────────────────────────────────────────────────────
-    _calcTP(isLong, entryPrice, pct) {
-        return isLong
-            ? entryPrice * (1 + pct / 100)
-            : entryPrice * (1 - pct / 100);
+    _calcTP(isLong, entryPrice, pct, slDist, rr) {
+        if (this.tpType === 'Risk:Reward') {
+            return isLong
+                ? entryPrice + slDist * rr
+                : entryPrice - slDist * rr;
+        } else {
+            return isLong
+                ? entryPrice * (1 + pct / 100)
+                : entryPrice * (1 - pct / 100);
+        }
     }
 
     // ── Break-even target price ───────────────────────────────────────────────
@@ -190,6 +294,25 @@ class ImbaAlgoStrategy extends BaseStrategy {
         const len = this.sensitivity * 10;
         const rollingHighArr = precomputeHighest(high, len);
         const rollingLowArr  = precomputeLowest(low, len);
+        
+        // Swings
+        const swingLowArr  = precomputeLowest(low, this.swingLength);
+        const swingHighArr = precomputeHighest(high, this.swingLength);
+
+        // Volatility
+        const atr = calculateATR(high, low, close, 10);
+        const atrr = atr.map(val => val !== null ? 3 * val : null);
+        const stdAtr = calculateStdev(atrr, 20).map(val => val !== null ? 2 * val : null);
+        const smaAtr = calculateSMA(atrr, 20);
+        const percentVolArr = new Array(n).fill(null);
+        for(let i = 0; i < n; i++) {
+            if (atrr[i] !== null && stdAtr[i] !== null && smaAtr[i] !== null) {
+                const topAtrDev = smaAtr[i] + stdAtr[i];
+                const bottomAtrDev = smaAtr[i] - stdAtr[i];
+                const calcDev = topAtrDev === bottomAtrDev ? 0 : (atrr[i] - bottomAtrDev) / (topAtrDev - bottomAtrDev);
+                percentVolArr[i] = 40 * calcDev + 30;
+            }
+        }
 
         // ── Trend state ───────────────────────────────────────────────────
         const isLongTrend  = new Array(n).fill(false);
@@ -206,8 +329,11 @@ class ImbaAlgoStrategy extends BaseStrategy {
             fibChannels[i] = fib;
             trendLine[i]   = fib.fib5;
 
-            const canLong  = close[i] >= fib.fib5 && close[i] >= fib.fib236 && !prevLong;
-            const canShort = close[i] <= fib.fib5 && close[i] <= fib.fib786 && !prevShort;
+            const pv = percentVolArr[i];
+            const volOk = pv !== null && pv > 70;
+
+            const canLong  = close[i] >= fib.fib5 && close[i] >= fib.fib236 && !prevLong && volOk;
+            const canShort = close[i] <= fib.fib5 && close[i] <= fib.fib786 && !prevShort && volOk;
 
             if (canLong) {
                 prevLong  = true;
@@ -228,6 +354,9 @@ class ImbaAlgoStrategy extends BaseStrategy {
         // ── Signal / candle loop ──────────────────────────────────────────
         const signals = [];
         const candles = [];
+        
+        let currentDayString = "";
+        let dailyProfit = 0;
 
         // Trade-level state (mirrors Pine var Trade)
         let tradeActive       = false;
@@ -271,6 +400,7 @@ class ImbaAlgoStrategy extends BaseStrategy {
 
             const finalProfit = tradeProfit;
             totalProfit += finalProfit;
+            dailyProfit += finalProfit;
             tradeCount++;
 
             // Deposit compound
@@ -327,6 +457,14 @@ class ImbaAlgoStrategy extends BaseStrategy {
         };
 
         for (let i = this.warmupBars; i < n; i++) {
+            // Convert current bar time to IST (UTC + 5:30)
+            const istDate = new Date(time[i] + (5.5 * 60 * 60 * 1000));
+            const dateStr = istDate.toISOString().split('T')[0];
+            if (dateStr !== currentDayString) {
+                currentDayString = dateStr;
+                dailyProfit = 0;
+            }
+
             const fib = fibChannels[i];
             if (!fib) {
                 if (!lean) candles.push({
@@ -444,7 +582,7 @@ class ImbaAlgoStrategy extends BaseStrategy {
                             }
                         }
                         if (!tp3Hit) tp3Hit = tpCheck(tp3Price, this.tp3SizePct, false, 'TP3');
-                        if (!tp4Hit) {
+                        if (!tp4Hit && !this.tp4Open) {
                             tp4Hit = tpCheck(tp4Price, this.tp4SizePct, false, 'TP4');
                             if (tp4Hit && tradeActive) {
                                 exitEvent = closeTrade(tp4Price, time[i], 'tp4', i);
@@ -463,20 +601,39 @@ class ImbaAlgoStrategy extends BaseStrategy {
 
             // ── 2. New signal ─────────────────────────────────────────────
             if (!tradeActive && (flipToLong || flipToShort)) {
+                // Time & Limit filter (IST)
+                const istObj = new Date(time[i] + (5.5 * 60 * 60 * 1000));
+                let dayOfWeek = istObj.getUTCDay(); 
+                let isoDay = dayOfWeek === 0 ? 7 : dayOfWeek; // 1=Mon, ..., 7=Sun
+                const isDayAllowed = this.parsedDays.includes(isoDay);
+                
+                const mins = istObj.getUTCHours() * 60 + istObj.getUTCMinutes();
+                const isSessionAllowed = this.parsedSessions.some(sess => {
+                    if (sess.start <= sess.end) {
+                        return mins >= sess.start && mins <= sess.end;
+                    } else {
+                        return mins >= sess.start || mins <= sess.end;
+                    }
+                });
+                const canTradeTime = isDayAllowed && isSessionAllowed;
+                const canTradeLoss = dailyProfit > -this.maxDailyLossPercent;
+
                 // RSI filter (optional)
                 const rsiOk = !this.useRsiFilter || rsi === null ||
                     (flipToLong  && rsi <= this.rsiOB) ||
                     (flipToShort && rsi >= this.rsiOS);
 
-                if (rsiOk) {
+                if (rsiOk && canTradeTime && canTradeLoss) {
                     const isLong = flipToLong;
                     entryPrice      = close[i];
-                    slPrice         = this._calcSL(isLong, entryPrice, fib);
+                    slPrice         = this._calcSL(isLong, entryPrice, fib, swingLowArr[i], swingHighArr[i]);
                     initialSlPrice  = slPrice;
-                    tp1Price        = this._calcTP(isLong, entryPrice, this.tp1Pct);
-                    tp2Price        = this._calcTP(isLong, entryPrice, this.tp2Pct);
-                    tp3Price        = this._calcTP(isLong, entryPrice, this.tp3Pct);
-                    tp4Price        = this._calcTP(isLong, entryPrice, this.tp4Pct);
+                    const slDist    = Math.abs(entryPrice - slPrice);
+                    
+                    tp1Price        = this._calcTP(isLong, entryPrice, this.tp1Pct, slDist, this.rr1);
+                    tp2Price        = this._calcTP(isLong, entryPrice, this.tp2Pct, slDist, this.rr2);
+                    tp3Price        = this._calcTP(isLong, entryPrice, this.tp3Pct, slDist, this.rr3);
+                    tp4Price        = this._calcTP(isLong, entryPrice, this.tp4Pct, slDist, this.rr4);
                     breakEvenPrice  = this._breakEvenPrice(
                         this.breakEvenTarget, tp1Price, tp2Price, tp3Price, tp4Price
                     );
