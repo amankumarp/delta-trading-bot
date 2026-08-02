@@ -8,7 +8,8 @@ export const STRATEGY_OPTIONS = [
   { id: 'bb-ai', name: 'Bollinger AI', description: 'Mean reversion strategy leveraging Gaussian distribution and neural signals.', icon: 'Activity' },
   { id: 'scalping-ai', name: 'Scalping AI', description: 'BTC scalping with EMA ribbon, MACD, RSI & ATR trailing SL. Min 1:2 RR, >50% win-rate target.', icon: 'Crosshair' },
   { id: 'imba-algo', name: 'IMBA ALGO', description: 'Fibonacci channel trend system with 4 TP levels, break-even logic, RSI filter & live drawdown tracking.', icon: 'TrendingUp' },
-  { id: 'sats', name: 'SATS', description: 'Self-Aware Trend System v1.9.0 — adaptive TQI + dynamic TP', icon: 'Compass' }
+  { id: 'sats', name: 'SATS', description: 'Self-Aware Trend System v1.9.0 — adaptive TQI + dynamic TP', icon: 'Compass' },
+  { id: 'pdh-pdl-sweep', name: 'PDH/PDL Sweep Reversal', description: 'ICT/SMC Liquidity Sweep Reversal strategy on Previous Day High/Low with multi-tier TP and Break-Even CTC.', icon: 'TrendingUp' }
 ];
 
 const generateRichMockData = (): BacktestResponse => {

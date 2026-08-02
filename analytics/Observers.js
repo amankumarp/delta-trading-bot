@@ -13,7 +13,9 @@ function parseCustomDate(dateStr) {
   
   // Handle purely numeric strings (Unix timestamps)
   if (/^\d+$/.test(dateStr)) {
-      const d = new Date(Number(dateStr));
+      let num = Number(dateStr);
+      if (dateStr.length <= 10) num *= 1000; // Convert seconds to milliseconds
+      const d = new Date(num);
       return isNaN(d.getTime()) ? null : d;
   }
 

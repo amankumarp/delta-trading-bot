@@ -21,6 +21,7 @@
 const SupertrendAI = require('./SupertrendStrategy');
 const BollingerBandAI = require('./bbStrategy');
 const ImbaAlgoStrategy = require('./ImbaAlgoStrategy');
+const PdhPdlStrategy = require('./PdhPdlStrategy');
 
 
 // ─── Parameter parsers (strategy-specific query params → opts object) ─────────
@@ -72,6 +73,35 @@ function parseImbaOpts(q) {
   if (q.allowedDays) opts.allowedDays = q.allowedDays;
   if (q.allowedSessions) opts.allowedSessions = q.allowedSessions;
   if (q.maxDailyLossPercent) opts.maxDailyLossPercent = parseFloat(q.maxDailyLossPercent);
+  return opts;
+}
+
+function parsePdhPdlOpts(q) {
+  const opts = {};
+  if (q.showPDLines !== undefined) opts.showPDLines = q.showPDLines === 'true';
+  if (q.showATRTrail !== undefined) opts.showATRTrail = q.showATRTrail === 'true';
+  if (q.showSwings !== undefined) opts.showSwings = q.showSwings === 'true';
+  if (q.showSignalBox !== undefined) opts.showSignalBox = q.showSignalBox === 'true';
+  if (q.showDashboard !== undefined) opts.showDashboard = q.showDashboard === 'true';
+  if (q.slType) opts.slType = q.slType;
+  if (q.slBufferTicks) opts.slBufferTicks = parseInt(q.slBufferTicks);
+  if (q.tpModel) opts.tpModel = q.tpModel;
+  if (q.ctcTrigger) opts.ctcTrigger = q.ctcTrigger;
+  if (q.tier1RR) opts.tier1RR = parseFloat(q.tier1RR);
+  if (q.tier1Pct) opts.tier1Pct = parseFloat(q.tier1Pct);
+  if (q.tier2RR) opts.tier2RR = parseFloat(q.tier2RR);
+  if (q.tier2Pct) opts.tier2Pct = parseFloat(q.tier2Pct);
+  if (q.tier3RR) opts.tier3RR = parseFloat(q.tier3RR);
+  if (q.tier3Pct) opts.tier3Pct = parseFloat(q.tier3Pct);
+  if (q.tier4RR) opts.tier4RR = parseFloat(q.tier4RR);
+  if (q.atrLen) opts.atrLen = parseInt(q.atrLen);
+  if (q.maxCandleAtrMult) opts.maxCandleAtrMult = parseFloat(q.maxCandleAtrMult);
+  if (q.maxStopAtrMult) opts.maxStopAtrMult = parseFloat(q.maxStopAtrMult);
+  if (q.trailAtrMult) opts.trailAtrMult = parseFloat(q.trailAtrMult);
+  if (q.pivotLen) opts.pivotLen = parseInt(q.pivotLen);
+  if (q.sessionFilter) opts.sessionFilter = q.sessionFilter;
+  if (q.maxLossesPerDay) opts.maxLossesPerDay = parseInt(q.maxLossesPerDay);
+  if (q.riskPercent) opts.riskPercent = parseFloat(q.riskPercent);
   return opts;
 }
 
@@ -141,6 +171,33 @@ const REGISTRY = {
       { name: 'allowedDays', type: 'days_checkbox', default: '1,2,3,4,5,6,7', label: 'Allowed Days', group: 'Time & Limits' },
       { name: 'allowedSessions', type: 'sessions_checkbox', default: '00:00-23:59', label: 'Trading Sessions (IST)', group: 'Time & Limits' },
       { name: 'maxDailyLossPercent', type: 'number', step: 0.1, default: 2.0, label: 'Max Daily Loss (%)', group: 'Time & Limits' }
+    ]
+  },
+  'pdh-pdl-sweep': {
+    Cls: PdhPdlStrategy,
+    parseOpts: parsePdhPdlOpts,
+    useHeikinAshi: false,
+    description: 'PDH/PDL Sweep Reversal — ICT/SMC Liquidity Sweep Reversal with Multi-Tier TP',
+    params: [
+      { name: 'slType', type: 'select', options: ['Swing High/Low', 'Signal Candle High/Low'], default: 'Swing High/Low', label: 'Stop Loss Type', group: 'Stop Loss & Take Profit' },
+      { name: 'slBufferTicks', type: 'number', default: 2, label: 'SL Buffer (Ticks)', group: 'Stop Loss & Take Profit' },
+      { name: 'tpModel', type: 'select', options: ['Fixed Multi-Tier R:R', 'Trailing Model (ATR)', 'Swing-Based Model'], default: 'Fixed Multi-Tier R:R', label: 'Take Profit Model', group: 'Stop Loss & Take Profit' },
+      { name: 'ctcTrigger', type: 'select', options: ['Never', 'After Tier 1', 'After Tier 2', 'After Tier 3', 'After Tier 4'], default: 'After Tier 1', label: 'Move SL to Break-Even (CTC)', group: 'Stop Loss & Take Profit' },
+      { name: 'tier1RR', type: 'number', step: 0.1, default: 1.5, label: 'Tier 1 Target (RR)', group: 'Take Profit Tiers' },
+      { name: 'tier1Pct', type: 'number', step: 5, default: 40, label: 'Tier 1 Quantity (%)', group: 'Take Profit Tiers' },
+      { name: 'tier2RR', type: 'number', step: 0.1, default: 2.5, label: 'Tier 2 Target (RR)', group: 'Take Profit Tiers' },
+      { name: 'tier2Pct', type: 'number', step: 5, default: 30, label: 'Tier 2 Quantity (%)', group: 'Take Profit Tiers' },
+      { name: 'tier3RR', type: 'number', step: 0.1, default: 4.0, label: 'Tier 3 Target (RR)', group: 'Take Profit Tiers' },
+      { name: 'tier3Pct', type: 'number', step: 5, default: 20, label: 'Tier 3 Quantity (%)', group: 'Take Profit Tiers' },
+      { name: 'tier4RR', type: 'number', step: 0.1, default: 6.0, label: 'Tier 4 Target (RR)', group: 'Take Profit Tiers' },
+      { name: 'atrLen', type: 'number', default: 14, label: 'ATR Period', group: 'ATR & Volatility' },
+      { name: 'maxCandleAtrMult', type: 'number', step: 0.1, default: 1.5, label: 'Max Signal Candle Size (x ATR)', group: 'ATR & Volatility' },
+      { name: 'maxStopAtrMult', type: 'number', step: 0.1, default: 2.0, label: 'Max Stop Distance (x ATR)', group: 'ATR & Volatility' },
+      { name: 'trailAtrMult', type: 'number', step: 0.1, default: 2.5, label: 'Trailing Stop ATR Mult', group: 'ATR & Volatility' },
+      { name: 'pivotLen', type: 'number', default: 5, label: 'Pivot Lookback', group: 'SMC Structure' },
+      { name: 'sessionFilter', type: 'select', options: ['All', 'London', 'NY', 'London & NY'], default: 'London & NY', label: 'Session Filter', group: 'Session & Limits' },
+      { name: 'maxLossesPerDay', type: 'number', default: 2, label: 'Max Daily Losses', group: 'Session & Limits' },
+      { name: 'riskPercent', type: 'number', step: 0.1, default: 1.0, label: 'Risk (%)', group: 'Session & Limits' }
     ]
   },
 };

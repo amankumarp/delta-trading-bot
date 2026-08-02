@@ -61,6 +61,7 @@ const SectionCard: React.FC<{ title: string; icon: React.ReactNode; children: Re
 
 // ── Monte Carlo Panel ──────────────────────────────────────────────────────────
 function MonteCarloView({ data }: { data: any }) {
+  if (!data) return null;
   const { robustnessDropoutRate, robustnessNoiseLevel } = useStore();
   const histData = (data.histogram || []).map((b: any) => ({ name: `$${Math.round(b.lo / 1000)}k`, count: b.count }));
   const ddHistData = (data.ddHistogram || []).map((b: any) => ({ name: b.label, count: b.count }));
@@ -137,6 +138,35 @@ function MonteCarloView({ data }: { data: any }) {
           <div className="flex justify-between items-center">
             <span className="text-xs text-slate-400">Return</span>
             <span className="text-sm font-black text-emerald-400">{data.totalReturnPct?.p95?.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-800/20 border border-white/5 rounded-2xl p-5 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-4 h-4 text-slate-400" />
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Risk & Probability Metrics</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Beat Buy & Hold</span>
+            <span className="text-sm font-black text-emerald-400">{data.probabilityMetrics?.beatBuyAndHold?.toFixed(1) ?? 0}%</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">P(DD &gt; 30%)</span>
+            <span className="text-sm font-black text-amber-500">{data.riskOfRuin?.drawdown30?.toFixed(1) ?? 0}%</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">P(DD &gt; 50%)</span>
+            <span className="text-sm font-black text-rose-400">{data.riskOfRuin?.drawdown50?.toFixed(1) ?? 0}%</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">P(Margin Call)</span>
+            <span className="text-sm font-black text-rose-500">{data.riskOfRuin?.marginCall?.toFixed(1) ?? 0}%</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Ruin Prob</span>
+            <span className="text-sm font-black text-rose-600">{data.riskOfRuin?.marginCall?.toFixed(1) ?? 0}%</span>
           </div>
         </div>
       </div>
@@ -246,6 +276,7 @@ function MonteCarloView({ data }: { data: any }) {
 
 // ── IS/OOS Panel ───────────────────────────────────────────────────────────────
 function ISOOSView({ data }: { data: any }) {
+  if (!data) return null;
   const is = data.inSample, oos = data.outOfSample;
   const bars = [
     { name: 'Win Rate', IS: parseFloat(is?.winRate || 0), OOS: parseFloat(oos?.winRate || 0) },
@@ -300,6 +331,15 @@ function ISOOSView({ data }: { data: any }) {
 
 // ── Walk-Forward Panel ────────────────────────────────────────────────────────
 function WalkForwardView({ data }: { data: any }) {
+  if (!data || data.error) {
+    return (
+      <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl text-center flex flex-col items-center justify-center h-48">
+        <AlertTriangle className="w-8 h-8 text-amber-500 mb-4" />
+        <h3 className="text-sm font-black uppercase tracking-widest text-amber-400 mb-2">Walk-Forward Analysis Unavailable</h3>
+        <p className="text-slate-300 text-xs">{data?.error || 'Insufficient data to perform walk-forward testing.'}</p>
+      </div>
+    );
+  }
   const windows: any[] = data.windowResults || [];
   const chartData = windows.map(w => ({ window: `W${w.window}`, IS: w.isScore, OOS: w.oosScore }));
 
@@ -387,6 +427,7 @@ function WalkForwardView({ data }: { data: any }) {
 
 // ── Sensitivity Panel ─────────────────────────────────────────────────────────
 function SensitivityView({ data }: { data: any }) {
+  if (!data) return null;
   const params: any[] = data.params || [];
   const barData = params.slice(0, 12).map(p => ({
     name: p.param, sensitivity: Math.abs(p.sensitivityPct ?? 0),
@@ -524,7 +565,15 @@ function TransactionCostView({ data }: { data: any }) {
 
 // ── Statistical Tests Panel ───────────────────────────────────────────────────
 function StatisticalTestsView({ data }: { data: any }) {
-  if (!data) return null;
+  if (!data || data.error) {
+    return (
+      <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl text-center flex flex-col items-center justify-center h-48">
+        <AlertTriangle className="w-8 h-8 text-amber-500 mb-4" />
+        <h3 className="text-sm font-black uppercase tracking-widest text-amber-400 mb-2">Statistical Tests Unavailable</h3>
+        <p className="text-slate-300 text-xs">{data?.error || 'Need at least 30 trades for robust statistical analysis.'}</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -598,6 +647,7 @@ function BenchmarkView({ data }: { data: any }) {
 
 // ── Full Report Panel ─────────────────────────────────────────────────────────
 function FullReportView({ data }: { data: any }) {
+  if (!data) return null;
   const { overall } = data;
   if (!overall) return null;
 
@@ -617,8 +667,8 @@ function FullReportView({ data }: { data: any }) {
           <div className="grid grid-cols-2 gap-4 text-xs">
             <MetricRow label="Confidence" value={overall.confidence ?? 'N/A'} tooltip="Overall confidence in the statistical edge" />
             <MetricRow label="Live Readiness" value={overall.liveReadiness ?? 'N/A'} tooltip="Is this strategy safe for live deployment?" />
-            <MetricRow label="Profit Prob" value={`${overall.probabilityMetrics?.positiveReturn ?? 0}%`} tooltip="% of simulated paths that end in profit" />
-            <MetricRow label="Ruin Prob" value={`${overall.riskOfRuin?.marginCall ?? 0}%`} tooltip="% of simulated paths that blow up the account" />
+            <MetricRow label="Profit Prob" value={`${overall.profitProbabilityPct ?? 0}%`} tooltip="% of simulated paths that end in profit" />
+            <MetricRow label="Ruin Prob" value={`${overall.ruinProbabilityPct ?? 0}%`} tooltip="% of simulated paths that blow up the account" />
             <MetricRow label="IS/OOS Ratio" value={overall.overfitRatio ?? 'N/A'} tooltip="Ratio of Out-of-Sample to In-Sample performance" />
             <MetricRow label="WF Ratio" value={overall.avgWalkForwardRatio ?? 'N/A'} tooltip="Average Out-of-Sample to In-Sample ratio across walk-forward windows" />
           </div>
@@ -657,8 +707,8 @@ function FullReportView({ data }: { data: any }) {
 
       {(data.transactionCostStressing || data.statisticalTests) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-          {data.transactionCostStressing && (
-            <SectionCard title="Transaction Cost Stressing" icon={<TrendingDown className="w-4 h-4" />}>
+          <SectionCard title="Transaction Cost Stressing" icon={<TrendingDown className="w-4 h-4" />}>
+            {data.transactionCostStressing ? (
               <div className="flex flex-col items-center justify-center py-4">
                 <VerdictBadge verdict={data.transactionCostStressing.verdict} />
                 <div className="grid grid-cols-2 gap-4 mt-6 w-full text-xs">
@@ -666,11 +716,16 @@ function FullReportView({ data }: { data: any }) {
                   <MetricRow label="Breakdown At" value={`${data.transactionCostStressing.breakdownMultiplier}x`} tooltip="Multiplier of base costs at which net profit is <= 0 or Sharpe < 0.5" />
                 </div>
               </div>
-            </SectionCard>
-          )}
+            ) : (
+              <div className="flex flex-col items-center justify-center py-4 text-center h-full">
+                <AlertTriangle className="w-6 h-6 text-amber-500 mb-2" />
+                <p className="text-xs text-amber-400">Data unavailable</p>
+              </div>
+            )}
+          </SectionCard>
 
-          {data.statisticalTests && (
-            <SectionCard title="Statistical Tests (T-Test)" icon={<BarChart2 className="w-4 h-4" />}>
+          <SectionCard title="Statistical Tests (T-Test)" icon={<BarChart2 className="w-4 h-4" />}>
+            {data.statisticalTests ? (
               <div className="flex flex-col items-center justify-center py-4">
                 <VerdictBadge verdict={data.statisticalTests.verdict} />
                 <div className="grid grid-cols-2 gap-4 mt-6 w-full text-xs">
@@ -678,8 +733,13 @@ function FullReportView({ data }: { data: any }) {
                   <MetricRow label="P-Value" value={data.statisticalTests.tTest?.pValueEstimate} tooltip="Probability that edge is due to random chance" />
                 </div>
               </div>
-            </SectionCard>
-          )}
+            ) : (
+              <div className="flex flex-col items-center justify-center py-4 text-center h-full">
+                <AlertTriangle className="w-6 h-6 text-amber-500 mb-2" />
+                <p className="text-xs text-amber-400">Not enough trades (&lt;30) for statistical significance</p>
+              </div>
+            )}
+          </SectionCard>
         </div>
       )}
     </div>
@@ -764,7 +824,7 @@ const RobustnessPanel: React.FC<Props> = ({ apiUrl, symbol, interval, startUnix,
     }
   }, [baseParams]);
 
-  const overall = robustnessResults['monte-carlo'];
+  const overall = robustnessResults['full']?.overall;
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
